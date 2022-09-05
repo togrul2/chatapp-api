@@ -15,16 +15,25 @@ services:
              --host 0.0.0.0 \
              --port 8000"
     environment:
-      - DB_URL=postgresql+asyncpg://postgres:memunlar@db:5432/chatapp
+      - DB_URL:${DB_URL}
+
+    depends_on:
+      - db
 
   db:
     image: postgres:14.4-alpine
     volumes:
       - postgres-data:/var/lib/postgresql/data
     environment:
-      - POSTGRES_DB=chatapp
-      - POSTGRES_USER=pguser
-      - POSTGRES_PASSWORD=testpassword
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    healthcheck:
+      test: [ "CMD-SHELL", "sh -c 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}'" ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
 
 volumes:
   postgres-data:

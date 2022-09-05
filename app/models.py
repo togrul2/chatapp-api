@@ -1,24 +1,18 @@
 """
-Models for validation in controllers via pydantic.
+db module with database models declaration.
 """
+from sqlalchemy import Column, Integer, String
 
-from datetime import date
-from typing import Optional
-
-from pydantic import EmailStr
-from sqlmodel import SQLModel, Field
+from db import Base
 
 
-class UserBase(SQLModel):
-    """User model"""
-    username: str
-    email: EmailStr
-    first_name: str
-    last_name: str
-    password: str
-    dob: date
+class User(Base):
+    __tablename__ = "user"
 
-
-class User(UserBase, table=True):
-    id: int = Field(default=None, primary_key=True)
-    profile_picture: Optional[str]
+    id = Column(Integer, primary_key=True, index=True)
+    first_name = Column(String(50))
+    last_name = Column(String(50))
+    username = Column(String(50), unique=True)
+    email = Column(String(50), unique=True)
+    password = Column(String)
+    profile_picture = Column(String, nullable=True)
