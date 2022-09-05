@@ -11,13 +11,36 @@ from schemas import UserCreate
 
 
 class BaseService(ABC):
+    """
+    Base service class with database operation for models.
+
+    Must override model attribute and assign model
+    which service is related to.
+
+    Example:
+        class BaseService(ABC):
+            model: Any
+
+        class UserService(BaseService):
+            model = User
+    """
     model: Any
 
     def __init__(self, db: Session):
         self.db = db
 
-    def get_by_id_or_404(self, id_: int):
-        item = self.db.query(self.model).get(id_)
+    def get_by_pk(self, pk: Any):
+        return self.db.query(self.model).get(pk)
+
+    def get_or_404(self, pk: Any):
+        """
+        Returns item matching the query. If item is not found
+        raises HTTPException with status code of 404.
+
+        Make sure to use unique identifier, if multiple items
+        match the query unexpected behavior might occur.
+        """
+        item = self.get_by_pk(pk)
         if item is None:
             raise HTTPException(
                 status_code=404,

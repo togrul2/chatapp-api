@@ -1,8 +1,6 @@
 """
 Models for validation in controllers via pydantic.
 """
-from typing import Optional
-
 from pydantic import BaseModel
 
 
@@ -21,10 +19,10 @@ class UserCreate(UserBase):
     password: str
 
 
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-
 class TokenData(BaseModel):
-    id: Optional[int] = None
+    access_token: str
+    refresh_token: str
+
+
+class RefreshData(BaseModel):
+    refresh: str
