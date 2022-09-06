@@ -1,7 +1,9 @@
+from typing import List, Optional
+
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from starlette.middleware.cors import CORSMiddleware
 
 from db import SessionLocal
 from jwt import (create_refresh_token,
@@ -9,7 +11,7 @@ from jwt import (create_refresh_token,
                  get_current_user_id,
                  CredentialsException,
                  verify_refresh)
-from schemas import UserCreate, UserBase, TokenData, RefreshData
+from schemas import UserCreate, UserBase, TokenData, RefreshData, UserRead
 from services import UserService
 
 app = FastAPI()
@@ -120,15 +122,66 @@ async def register(data: UserCreate, db: Session = Depends(get_db)):
     return user
 
 
-@app.get("/api/users/me", response_model=UserBase)
+@app.get("/api/users/me", response_model=UserRead)
 async def get_auth_user(user_id: int = Depends(get_current_user_id),
                         db: Session = Depends(get_db)):
+    """
+    Returns authenticated user's data or returns 401 if unauthenticated.
+    \f
+    Parameters:
+        user_id(int): id of authenticated user
+        db: session for IO operations with database.
+    """
     user_service = UserService(db)
-    print(user_id)
     user = user_service.get_by_pk(user_id)
     return user
 
 
-@app.get("/api/users/{user_id}")
+@app.delete("/api/users/me", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_auth_user(user_id: int = Depends(get_current_user_id),
+                           db: Session = Depends(get_db)):
+    """
+    Deletes authenticated user's data or returns 401 if unauthenticated.
+    \f
+    Parameters:
+        user_id(int): id of authenticated user
+        db: session for IO operations with database.
+    """
+    user_service = UserService(db)
+    user_service.delete(user_id)
+    return
+
+
+@app.get("/api/users", response_model=List[UserRead])
+async def get_users(keyword: Optional[str] = None,
+                    db: Session = Depends(get_db)):
+    """
+    Lists users, also can perform search with keyword
+    which will be compared to users' username and password.
+    - **keyword**: keyword url parameter which will be
+        used to find users with matching username or password.
+    \f
+    Parameters:
+         keyword(str): query param for user search.
+         db: session for IO operations with database.
+    """
+    user_service = UserService(db)
+
+    if keyword:
+        return user_service.filter_by_username_or_email(keyword, keyword)
+    else:
+        return user_service.all()
+
+
+@app.get("/api/users/{user_id}", response_model=UserRead)
 async def get_user(user_id: int, db: Session = Depends(get_db)):
-    pass
+    """
+    Returns user with corresponding id or returns 404 error.
+    - **user_id**: id of a user.
+    \f
+    Parameters:
+         user_id(int): id of a user.
+         db: session for IO operations with database.
+    """
+    user_service = UserService(db)
+    return user_service.get_or_404(user_id)

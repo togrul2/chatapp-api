@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Mapping, Any
+from typing import Any
 
 from fastapi import HTTPException
 from pydantic import BaseModel
@@ -29,10 +29,13 @@ class BaseService(ABC):
     def __init__(self, db: Session):
         self.db = db
 
-    def get_by_pk(self, pk: Any):
+    def get_by_pk(self, pk: Any) -> Any:
         return self.db.query(self.model).get(pk)
 
-    def get_or_404(self, pk: Any):
+    def all(self):
+        return self.db.query(self.model).all()
+
+    def get_or_404(self, pk: Any) -> Any:
         """
         Returns item matching the query. If item is not found
         raises HTTPException with status code of 404.
@@ -48,29 +51,53 @@ class BaseService(ABC):
             )
         return item
 
-    def create(self, fields: BaseModel):
+    def create(self, fields: BaseModel) -> Any:
         item = self.model(**fields.dict())
         self.db.add(item)
         self.db.commit()
         return item
 
-    @classmethod
-    def update(cls, db: Session,  fields: Mapping[str, Any]):
+    def update(self, fields: BaseModel) -> Any:
         ...
+
+    def delete(self, pk: Any) -> bool:
+        """
+        Delete method
+
+        Returns:
+            bool: True, if delete was successful.
+        Raises:
+            HTTPException: if object is not found.
+        """
+        item = self.get_or_404(pk)
+        self.db.delete(item)
+        self.db.commit()
+        return True
 
 
 class UserService(BaseService):
     model = User
 
     def create(self, fields: UserCreate):
+        """Creates user with hashed password."""
         fields.password = get_hashed_password(fields.password)
         return super().create(fields)
 
     def get_by_username(self, username: str):
+        """Returns user with matching username"""
         return self.db.query(self.model).filter_by(username=username).first()
 
     def get_by_email(self, email: str):
+        """Returns user with matching email"""
         return self.db.query(self.model).filter_by(email=email).first()
+
+    def filter_by_username_or_email(self, username: str,
+                                    email: str) -> list[Any]:
+        """List users by matching username or email"""
+        return self.db.query(self.model).filter(
+            (self.model.username.like(username)) |
+            (self.model.email.like(email))
+        ).all()
 
     def authenticate_user(self, username: str, password: str):
         user = self.get_by_username(username)

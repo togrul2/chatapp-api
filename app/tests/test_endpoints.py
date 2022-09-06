@@ -1,8 +1,6 @@
-import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
 
-from db import engine
+
 from main import app
 
 client = TestClient(app)
@@ -11,12 +9,7 @@ client = TestClient(app)
 class TestRegisterUser:
     url = "/api/register"
 
-    @pytest.fixture()
-    def teardown(self):
-        with Session(engine) as session:
-            pass
-
-    def test_register_success(self, teardown):
+    def test_register_success(self):
         response = client.post(self.url, json={
             "username": "johndoe",
             "email": "johndoe@example.com",
@@ -31,11 +24,13 @@ class TestRegisterUser:
             "first_name": "John",
             "last_name": "Doe",
         }
+        # with Session(engine) as session:
+        #     session.query(User).delete()
 
-    # def test_register_missing_fields(self):
-    #     response = client.post(self.url, json={
-    #         "username": "johndoe",
-    #         "password": "memunlar"
-    #     })
-    #     assert response.status_code == 422
-    #     assert response.json() == {}
+    def test_register_missing_fields(self):
+        response = client.post(self.url, json={
+            "username": "johndoe",
+            "password": "memunlar"
+        })
+        assert response.status_code == 422
+        assert response.json() == {}
