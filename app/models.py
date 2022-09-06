@@ -1,5 +1,5 @@
 """
-db module with database models declaration.
+Models module with database models declaration.
 """
 from sqlalchemy import Column, Integer, String
 

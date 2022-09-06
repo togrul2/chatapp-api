@@ -24,6 +24,7 @@ class BaseService(ABC):
         class UserService(BaseService):
             model = User
     """
+    __slots__ = ["model"]
     model: Any
 
     def __init__(self, db: Session):
@@ -39,9 +40,6 @@ class BaseService(ABC):
         """
         Returns item matching the query. If item is not found
         raises HTTPException with status code of 404.
-
-        Make sure to use unique identifier, if multiple items
-        match the query unexpected behavior might occur.
         """
         item = self.get_by_pk(pk)
         if item is None:
@@ -57,8 +55,16 @@ class BaseService(ABC):
         self.db.commit()
         return item
 
-    def update(self, fields: BaseModel) -> Any:
-        ...
+    def update(self, pk, fields: BaseModel) -> Any:
+        item = self.get_or_404(pk)
+
+        for field, value in fields.dict().items():
+            if value is not None:
+                setattr(item, field, value)
+
+        self.db.commit()
+        self.db.refresh(item)
+        return item
 
     def delete(self, pk: Any) -> bool:
         """

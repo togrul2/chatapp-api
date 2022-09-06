@@ -1,3 +1,6 @@
+"""
+JWT module with all stuff related to authentication via jwt.
+"""
 from datetime import datetime, timedelta
 from functools import partial
 

@@ -1,15 +1,17 @@
 """
-Models for validation in controllers via pydantic.
+Schemas for validation in controllers via pydantic.
 """
+from typing import Optional
+
 from pydantic import BaseModel, EmailStr, Field
 
 
 class UserBase(BaseModel):
     """User model"""
-    username: str = Field(min_length=6, default="johndoe")
-    email: EmailStr = Field(...)
-    first_name: str = Field(min_length=2, default="John")
-    last_name: str = Field(min_length=2, default="Doe")
+    username: str = Field(min_length=6)
+    email: EmailStr
+    first_name: str = Field(min_length=2)
+    last_name: str = Field(min_length=2)
 
     class Config:
         orm_mode = True
@@ -30,6 +32,13 @@ class UserCreate(UserBase):
 
 class UserRead(UserBase):
     id: int = Field(description="id of a user", default=1)
+
+
+class UserPartialUpdate(UserBase):
+    username: Optional[str] = Field(min_length=6)
+    email: EmailStr | None
+    first_name: Optional[str] = Field(min_length=2)
+    last_name: Optional[str] = Field(min_length=2)
 
 
 class TokenData(BaseModel):

@@ -11,14 +11,26 @@ from jwt import (create_refresh_token,
                  get_current_user_id,
                  CredentialsException,
                  verify_refresh)
-from schemas import UserCreate, UserBase, TokenData, RefreshData, UserRead
+from schemas import UserCreate, UserBase, TokenData, RefreshData, UserRead, \
+    UserPartialUpdate
 from services import UserService
 
-app = FastAPI()
+app = FastAPI(
+    title="Chatapp API",
+    description="""
+    Chatapp API
 
-origins = [
-    "http://localhost:8000",
-]
+    API for real time communication with friends.
+    Chat in private or in public groups.
+    """,
+    version="0.0.1 beta",
+    contact={
+        "name": "Togrul Asadov",
+        "github": "https://github.com/togrul2",
+    }
+)
+
+origins = ["http://localhost:8000"]
 
 app.add_middleware(
     CORSMiddleware,
@@ -29,8 +41,8 @@ app.add_middleware(
 )
 
 
-# Dependency
 def get_db():
+    """Returns db session for use in controllers."""
     db = SessionLocal()
     try:
         yield db
@@ -128,13 +140,87 @@ async def get_auth_user(user_id: int = Depends(get_current_user_id),
     """
     Returns authenticated user's data or returns 401 if unauthenticated.
     \f
-    Parameters:
-        user_id(int): id of authenticated user
-        db: session for IO operations with database.
+    :param user_id: id of authenticated user.
+    :param db: session for IO operations with database.
+    :return: Auth user's data.
     """
     user_service = UserService(db)
     user = user_service.get_by_pk(user_id)
     return user
+
+
+@app.put("/api/users/me", response_model=UserBase)
+async def update_auth_user(data: UserBase,
+                           user_id: int = Depends(get_current_user_id),
+                           db: Session = Depends(get_db)):
+    """
+    Updates authenticated user's data,
+    - **username**: username of a user, must be at least 6 characters
+    - **email**: email address of a user, must be a valid email
+    - **first_name**: first name of a user, must be at least 2 characters
+    - **last_name**: last name of a user, must be at least 2 characters
+    \f
+    :param data: request's body
+    :param user_id: id of authenticated user
+    :param db: session for IO operations with database
+    :return: Updated user data
+    """
+    user_service = UserService(db)
+
+    # Validate uniqueness of username and email
+    if user_service.get_by_username(data.username) not in (
+            None, user_service.get_or_404(user_id)):
+        raise HTTPException(
+            status_code=400,
+            detail="User with given username already exists."
+
+        )
+
+    if user_service.get_by_email(data.email) not in (
+            None, user_service.get_or_404(user_id)):
+        raise HTTPException(
+            status_code=400,
+            detail="User with given username already exists."
+        )
+
+    return user_service.update(user_id, data)
+
+
+@app.patch("/api/users/me", response_model=UserRead)
+async def partial_update_auth_user(data: UserPartialUpdate,
+                                   user_id: int = Depends(get_current_user_id),
+                                   db: Session = Depends(get_db)):
+    """
+    Partially updates authenticated user's data,
+    - **username**: username of a user, must be at least 6 characters
+    - **email**: email address of a user, must be a valid email
+    - **first_name**: first name of a user, must be at least 2 characters
+    - **last_name**: last name of a user, must be at least 2 characters
+    \f
+    :param data: request's body
+    :param user_id: id of authenticated user
+    :param db: session for IO operations with database
+    :return: Updated user data
+    """
+    user_service = UserService(db)
+
+    # Validate uniqueness of username and email
+    if user_service.get_by_username(data.username) not in (
+            None, user_service.get_or_404(user_id)):
+        raise HTTPException(
+            status_code=400,
+            detail="User with given username already exists."
+
+        )
+
+    if user_service.get_by_email(data.email) not in (
+            None, user_service.get_or_404(user_id)):
+        raise HTTPException(
+            status_code=400,
+            detail="User with given username already exists."
+        )
+
+    return user_service.update(user_id, data)
 
 
 @app.delete("/api/users/me", status_code=status.HTTP_204_NO_CONTENT)
