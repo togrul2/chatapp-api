@@ -31,7 +31,7 @@ class UserCreate(UserBase):
 
 
 class UserRead(UserBase):
-    id: int = Field(description="id of a user", default=1)
+    id: int = Field(description="id of a user")
 
 
 class UserPartialUpdate(UserBase):
@@ -47,4 +47,4 @@ class TokenData(BaseModel):
 
 
 class RefreshData(BaseModel):
-    refresh: str
+    refresh_token: str

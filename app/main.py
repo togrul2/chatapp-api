@@ -5,14 +5,10 @@ from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 
-from db import SessionLocal
-from jwt import (create_refresh_token,
-                 create_access_token,
-                 get_current_user_id,
-                 CredentialsException,
-                 verify_refresh)
-from schemas import UserCreate, UserBase, TokenData, RefreshData, UserRead, \
-    UserPartialUpdate
+import schemas
+from db import get_db
+from jwt import (create_refresh_token, create_access_token, verify_refresh,
+                 get_current_user_id, CredentialsException)
 from services import UserService
 
 app = FastAPI(
@@ -41,17 +37,8 @@ app.add_middleware(
 )
 
 
-def get_db():
-    """Returns db session for use in controllers."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
 @app.post("/api/token", status_code=status.HTTP_201_CREATED,
-          response_model=TokenData)
+          response_model=schemas.TokenData)
 async def token(db: Session = Depends(get_db),
                 credentials: OAuth2PasswordRequestForm = Depends()):
     """
@@ -79,8 +66,8 @@ async def token(db: Session = Depends(get_db),
 
 
 @app.post("/api/refresh", status_code=status.HTTP_201_CREATED,
-          response_model=TokenData)
-async def refresh(data: RefreshData, db: Session = Depends(get_db)):
+          response_model=schemas.TokenData)
+async def refresh(data: schemas.RefreshData, db: Session = Depends(get_db)):
     """
     Creates access & refresh tokens based on refresh token.
     - **refresh_token**: refresh token
@@ -89,20 +76,20 @@ async def refresh(data: RefreshData, db: Session = Depends(get_db)):
         data: refresh_token of a user.
         db: session for IO operations with database.
     """
-    user_id = verify_refresh(data.refresh)
+    user_id = verify_refresh(data.refresh_token)
     user_service = UserService(db)
     if user_service.get_by_pk(user_id) is None:
         raise CredentialsException
 
     return {
-        "access": create_access_token(user_id),
-        "refresh": create_refresh_token(user_id)
+        "access_token": create_access_token(user_id),
+        "refresh_token": create_refresh_token(user_id)
     }
 
 
 @app.post("/api/register", status_code=status.HTTP_201_CREATED,
-          response_model=UserBase)
-async def register(data: UserCreate, db: Session = Depends(get_db)):
+          response_model=schemas.UserRead)
+async def register(data: schemas.UserCreate, db: Session = Depends(get_db)):
     """
     Create a user in database with given data:
     - **username**: unique name
@@ -127,14 +114,14 @@ async def register(data: UserCreate, db: Session = Depends(get_db)):
     if user_service.get_by_email(data.email) is not None:
         raise HTTPException(
             status_code=400,
-            detail="User with given username already exists."
+            detail="User with given email already exists."
         )
 
     user = user_service.create(data)
     return user
 
 
-@app.get("/api/users/me", response_model=UserRead)
+@app.get("/api/users/me", response_model=schemas.UserRead)
 async def get_auth_user(user_id: int = Depends(get_current_user_id),
                         db: Session = Depends(get_db)):
     """
@@ -149,8 +136,8 @@ async def get_auth_user(user_id: int = Depends(get_current_user_id),
     return user
 
 
-@app.put("/api/users/me", response_model=UserBase)
-async def update_auth_user(data: UserBase,
+@app.put("/api/users/me", response_model=schemas.UserRead)
+async def update_auth_user(data: schemas.UserBase,
                            user_id: int = Depends(get_current_user_id),
                            db: Session = Depends(get_db)):
     """
@@ -186,8 +173,8 @@ async def update_auth_user(data: UserBase,
     return user_service.update(user_id, data)
 
 
-@app.patch("/api/users/me", response_model=UserRead)
-async def partial_update_auth_user(data: UserPartialUpdate,
+@app.patch("/api/users/me", response_model=schemas.UserRead)
+async def partial_update_auth_user(data: schemas.UserPartialUpdate,
                                    user_id: int = Depends(get_current_user_id),
                                    db: Session = Depends(get_db)):
     """
@@ -223,22 +210,33 @@ async def partial_update_auth_user(data: UserPartialUpdate,
     return user_service.update(user_id, data)
 
 
+@app.post("/api/users/me/image")
+async def upload_profile_picture(user_id: int = Depends(get_current_user_id),
+                                 db: Session = Depends(get_db)):
+    """
+    Upload image for authenticated user.
+    - **image**: image file.
+    \f
+    :param user_id:
+    :param db: session for IO operations with database.
+    :return:
+    """
+
+
 @app.delete("/api/users/me", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_auth_user(user_id: int = Depends(get_current_user_id),
                            db: Session = Depends(get_db)):
     """
     Deletes authenticated user's data or returns 401 if unauthenticated.
     \f
-    Parameters:
-        user_id(int): id of authenticated user
-        db: session for IO operations with database.
+    :param user_id: id of authenticated user
+    :param db: session for IO operations with database.
     """
     user_service = UserService(db)
     user_service.delete(user_id)
-    return
 
 
-@app.get("/api/users", response_model=List[UserRead])
+@app.get("/api/users", response_model=List[schemas.UserRead])
 async def get_users(keyword: Optional[str] = None,
                     db: Session = Depends(get_db)):
     """
@@ -247,9 +245,10 @@ async def get_users(keyword: Optional[str] = None,
     - **keyword**: keyword url parameter which will be
         used to find users with matching username or password.
     \f
-    Parameters:
-         keyword(str): query param for user search.
-         db: session for IO operations with database.
+
+    :param keyword: query param for user search.
+    :param db: session for IO operations with database.
+    :return: List of searched users.
     """
     user_service = UserService(db)
 
@@ -259,15 +258,16 @@ async def get_users(keyword: Optional[str] = None,
         return user_service.all()
 
 
-@app.get("/api/users/{user_id}", response_model=UserRead)
+@app.get("/api/users/{user_id}", response_model=schemas.UserRead)
 async def get_user(user_id: int, db: Session = Depends(get_db)):
     """
     Returns user with corresponding id or returns 404 error.
     - **user_id**: id of a user.
     \f
-    Parameters:
-         user_id(int): id of a user.
-         db: session for IO operations with database.
+
+    :param user_id: id of a user.
+    :param db: session for IO operations with database.
+    :return: user with given id.
     """
     user_service = UserService(db)
     return user_service.get_or_404(user_id)

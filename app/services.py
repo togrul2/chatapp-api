@@ -1,3 +1,6 @@
+"""
+Services module with crud tools for models.
+"""
 from abc import ABC
 from typing import Any
 

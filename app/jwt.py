@@ -9,10 +9,8 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 
-from config import (SECRET_KEY,
-                    ACCESS_TOKEN_EXPIRE_MINUTES,
-                    REFRESH_TOKEN_EXPIRE_MINUTES,
-                    ALGORITHM)
+from config import (SECRET_KEY, ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM,
+                    REFRESH_TOKEN_EXPIRE_MINUTES)
 
 password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
