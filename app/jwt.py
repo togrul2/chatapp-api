@@ -9,8 +9,8 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 
-from config import (SECRET_KEY, ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM,
-                    REFRESH_TOKEN_EXPIRE_MINUTES)
+from config import (ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM,
+                    REFRESH_TOKEN_EXPIRE_MINUTES, settings)
 
 password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -41,7 +41,8 @@ def _create_token(type_: int, expires_delta, user_id: int):
     to_encode = {"user_id": user_id,
                  "expire": expire.isoformat(),
                  "type": type_}
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, settings.secret_key,
+                             algorithm=ALGORITHM)
     return encoded_jwt
 
 
@@ -49,7 +50,6 @@ create_access_token = partial(_create_token, TokenType.ACCESS,
                               timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
 create_refresh_token = partial(_create_token, TokenType.REFRESH,
                                timedelta(minutes=REFRESH_TOKEN_EXPIRE_MINUTES))
-
 
 CredentialsException = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -66,7 +66,8 @@ ExpiredTokenException = HTTPException(
 def _get_user_from_token(token_type: int, token: str):
     """Base function for retrieving user's id from token."""
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, settings.secret_key,
+                             algorithms=[ALGORITHM])
         expire = datetime.fromisoformat(payload.get("expire"))
         type_ = payload.get("type")
 

@@ -108,6 +108,13 @@ class UserService(BaseService):
             (self.model.email.like(email))
         ).all()
 
+    def update_profile_picture(self, user_id: int, path: str):
+        user = self.get_by_pk(user_id)
+        user.profile_picture = path
+        self.db.commit()
+        self.db.refresh(user)
+        return user
+
     def authenticate_user(self, username: str, password: str):
         user = self.get_by_username(username)
         # If user with that username is not found or password is wrong, fail.

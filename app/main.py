@@ -1,11 +1,14 @@
+import shutil
 from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends, status, Form, UploadFile
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 
 import schemas
+from config import BASE_DIR
 from db import get_db
 from jwt import (create_refresh_token, create_access_token, verify_refresh,
                  get_current_user_id, CredentialsException)
@@ -25,6 +28,9 @@ app = FastAPI(
         "github": "https://github.com/togrul2",
     }
 )
+
+app.mount("/static", StaticFiles(directory=BASE_DIR / "app" / "static"),
+          name="static")
 
 origins = ["http://localhost:8000"]
 
@@ -67,16 +73,15 @@ async def token(db: Session = Depends(get_db),
 
 @app.post("/api/refresh", status_code=status.HTTP_201_CREATED,
           response_model=schemas.TokenData)
-async def refresh(data: schemas.RefreshData, db: Session = Depends(get_db)):
+async def refresh(refresh_token: str = Form(), db: Session = Depends(get_db)):
     """
     Creates access & refresh tokens based on refresh token.
     - **refresh_token**: refresh token
     \f
-    Parameters:
-        data: refresh_token of a user.
-        db: session for IO operations with database.
+    :param refresh_token: refresh token of a user.
+    :param db: session for IO operations with database.
     """
-    user_id = verify_refresh(data.refresh_token)
+    user_id = verify_refresh(refresh_token)
     user_service = UserService(db)
     if user_service.get_by_pk(user_id) is None:
         raise CredentialsException
@@ -210,17 +215,46 @@ async def partial_update_auth_user(data: schemas.UserPartialUpdate,
     return user_service.update(user_id, data)
 
 
-@app.post("/api/users/me/image")
-async def upload_profile_picture(user_id: int = Depends(get_current_user_id),
+def get_file_path(user_id: int, image: UploadFile):
+    """Generates path for user profile pictures."""
+
+    base_path = BASE_DIR / "app" / "static" / str(user_id)
+    base_path.mkdir(exist_ok=True, parents=True)
+    return base_path / image.filename
+
+
+def get_file_url(user_id: int, image: UploadFile):
+    """
+    Returns url for file.
+    :param user_id: id of a user
+    :param image:
+    :return:
+    """
+    return f"static/{user_id}/{image.filename}"
+
+
+@app.post("/api/users/me/image", response_model=schemas.UserRead)
+async def upload_profile_picture(image: UploadFile,
+                                 user_id: int = Depends(get_current_user_id),
                                  db: Session = Depends(get_db)):
     """
     Upload image for authenticated user.
     - **image**: image file.
     \f
-    :param user_id:
+    :param image: Profile image user uploads.
+    :param user_id: id of an authenticated user.
     :param db: session for IO operations with database.
     :return:
     """
+    path = get_file_path(user_id, image)
+    url = get_file_url(user_id, image)
+
+    with open(path, "wb") as fp:
+        shutil.copyfileobj(image.file, fp)
+
+    user_service = UserService(db)
+    user = user_service.update_profile_picture(user_id, url)
+    return user
 
 
 @app.delete("/api/users/me", status_code=status.HTTP_204_NO_CONTENT)

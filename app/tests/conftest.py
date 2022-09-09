@@ -12,12 +12,15 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from config import BASE_DIR
+from jwt import create_refresh_token, create_access_token
 from main import app as fastapi_app
 from db import Base, get_db
 from schemas import UserCreate
 from services import UserService
 
-# this is to include backend dir in sys.path so that we can import from db,main.py
+# this is to include backend dir in sys.path
+# so that we can import from db, main.py
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 SQLALCHEMY_TEST_DATABASE_URL = "sqlite:///./test_db.sqlite3"
@@ -70,6 +73,11 @@ def client(
         yield _client
 
 
+def pytest_unconfigure(config):
+    """Called before test process is exited."""
+    os.remove(BASE_DIR / "app" / "tests" / "test_db.sqlite3")
+
+
 user_password = "Testpassword"
 
 
@@ -86,3 +94,27 @@ def user():
         ))
         yield user
         user_service.delete(user.id)
+
+
+@pytest.fixture(scope="function")
+def auth_tokens(user):
+    yield {
+        "access_token": create_access_token(user.id),
+        "refresh_token": create_refresh_token(user.id)
+    }
+
+
+@pytest.fixture(scope="function")
+def auth_client(app, db_session, auth_tokens):
+    def _get_test_db():
+        try:
+            yield db_session
+        finally:
+            pass
+
+    app.dependency_overrides[get_db] = _get_test_db
+    with TestClient(app) as _client:
+        _client.headers = {
+            "Authorization": f"Bearer {auth_tokens['access_token']}"
+        }
+        yield _client

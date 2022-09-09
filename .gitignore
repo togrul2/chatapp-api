@@ -2,9 +2,11 @@
 # Edit at https://www.toptal.com/developers/gitignore?templates=python
 
 ### Python ###
-# Byte-compiled / optimized / DLL files
+# Custom exclusions
 .idea/
-app/tests/test_db.sqlite3
+app/static/*
+
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class

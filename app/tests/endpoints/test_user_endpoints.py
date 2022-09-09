@@ -89,7 +89,7 @@ class TestToken:
         """Test refresh endpoint successful attempt."""
         refresh_token = create_refresh_token(user.id)
         response = client.post(self.refresh_url,
-                               json={"refresh_token": refresh_token})
+                               data={"refresh_token": refresh_token})
 
         assert response.status_code == 201
         assert response.json().keys() == frozenset({"access_token",
@@ -99,11 +99,46 @@ class TestToken:
         """Test refresh endpoint with invalid refresh token."""
         refresh_token = create_access_token(user.id)
         response = client.post(self.refresh_url,
-                               json={"refresh_token": refresh_token})
+                               data={"refresh_token": refresh_token})
 
-        # assert response.status_code == 401
+        assert response.status_code == 401
         assert response.json()['detail'] == "Could not validate credentials"
 
 
 class TestUsersMe:
+    """Test authenticated user endpoint."""
     url = "/api/users/me"
+
+    def test_get_user_successful(self, auth_client):
+        print(auth_client.headers)
+        response = auth_client.get(self.url)
+        assert response.status_code == 200
+
+    def test_get_user_unauthenticated(self, client):
+        response = client.get(self.url)
+        assert response.status_code == 401
+
+    def test_modify_user(self, auth_client):
+        payload = {
+            "username": "johndoe",
+            "email": "johndoe@gmail.com",
+            "first_name": "John",
+            "last_name": "Doe",
+        }
+        response = auth_client.put(self.url, json=payload)
+
+        assert response.status_code == 200
+        body = response.json()
+        for field in payload:
+            assert body[field] == payload[field]
+
+    def test_partial_modify_user(self, auth_client):
+        payload = {
+            "username": "johndoe2",
+        }
+        response = auth_client.patch(self.url, json=payload)
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["username"] == payload["username"]
+

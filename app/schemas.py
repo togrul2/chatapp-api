@@ -32,6 +32,7 @@ class UserCreate(UserBase):
 
 class UserRead(UserBase):
     id: int = Field(description="id of a user")
+    profile_picture: Optional[str]
 
 
 class UserPartialUpdate(UserBase):
