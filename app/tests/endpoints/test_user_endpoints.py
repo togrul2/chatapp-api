@@ -1,3 +1,10 @@
+import os
+import tempfile
+
+import pytest
+from PIL import Image
+
+from config import BASE_DIR
 from jwt import create_refresh_token, create_access_token
 from tests.conftest import user_password
 
@@ -6,9 +13,9 @@ class TestRegisterUser:
     """Class for testing `/api/register` endpoint."""
     url = "/api/register"
     user_data = {
-        "username": "johndoe",
-        "email": "johndoe@example.com",
-        "first_name": "John",
+        "username": "peterdoe",
+        "email": "peterdoe@example.com",
+        "first_name": "Peter",
         "last_name": "Doe",
         "password": user_password
     }
@@ -20,15 +27,15 @@ class TestRegisterUser:
         assert response.status_code == 201
         body = response.json()
 
-        assert body['username'] == 'johndoe'
-        assert body['email'] == 'johndoe@example.com'
-        assert body['first_name'] == 'John'
-        assert body['last_name'] == 'Doe'
+        assert body['username'] == self.user_data['username']
+        assert body['email'] == self.user_data['email']
+        assert body['first_name'] == self.user_data['first_name']
+        assert body['last_name'] == self.user_data['last_name']
 
     def test_register_missing_fields(self, client):
         """Test user register with bad data"""
         response = client.post(self.url, json={
-            "username": "johndoe",
+            "username": "peterdoe",
             "password": "dummy_pass"
         })
 
@@ -38,7 +45,7 @@ class TestRegisterUser:
         """Test registering user with existing username."""
         response = client.post(self.url, json={
             **self.user_data,
-            "email": "johndoe2@example.com",
+            "email": "peterdoe2@example.com",
         })
 
         assert response.status_code == 400
@@ -49,7 +56,7 @@ class TestRegisterUser:
         """Test registering user with existing email."""
         response = client.post(self.url, json={
             **self.user_data,
-            "username": "johndoe2"
+            "username": "peterdoe2"
         })
 
         assert response.status_code == 400
@@ -108,9 +115,18 @@ class TestToken:
 class TestUsersMe:
     """Test authenticated user endpoint."""
     url = "/api/users/me"
+    image_url = "/api/users/me/image"
+
+    @pytest.fixture(scope="function")
+    def profile_picture(self):
+        with tempfile.NamedTemporaryFile(suffix=".jpg") as image_file:
+            img = Image.new('RGB', (10, 10))
+            img.save(image_file, format='JPEG')
+            image_file.seek(0)
+            yield image_file
+            os.remove(image_file.name)
 
     def test_get_user_successful(self, auth_client):
-        print(auth_client.headers)
         response = auth_client.get(self.url)
         assert response.status_code == 200
 
@@ -142,3 +158,16 @@ class TestUsersMe:
         body = response.json()
         assert body["username"] == payload["username"]
 
+    def test_image_upload(self, user, auth_client, profile_picture):
+        files = {"profile_picture": profile_picture}
+        response = auth_client.post(self.image_url, files=files)
+
+        assert response.status_code == 200
+        body = response.json()
+        path = BASE_DIR / "app" / body['profile_picture']
+        assert os.path.exists(path)
+
+        # teardown
+        os.remove(path)
+        dir_path = BASE_DIR / "app" / "static" / str(user.id)
+        os.rmdir(dir_path)

@@ -3,8 +3,7 @@ Config and fixtures for tests.
 """
 import os
 import sys
-from typing import Any
-from typing import Generator
+from typing import Mapping, Any
 
 import pytest
 from fastapi import FastAPI
@@ -22,8 +21,9 @@ from services import UserService
 # this is to include backend dir in sys.path
 # so that we can import from db, main.py
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+DB_PATH = BASE_DIR / 'test_db.sqlite3'
 
-SQLALCHEMY_TEST_DATABASE_URL = "sqlite:///./test_db.sqlite3"
+SQLALCHEMY_TEST_DATABASE_URL = "sqlite:///" + str(DB_PATH)
 test_engine = create_engine(
     SQLALCHEMY_TEST_DATABASE_URL, connect_args={"check_same_thread": False}
 )
@@ -32,50 +32,38 @@ SessionTesting = sessionmaker(autocommit=False, autoflush=False,
                               bind=test_engine)
 
 
-@pytest.fixture(scope="function")
-def app() -> Generator[FastAPI, Any, None]:
+def _get_test_db():
+    db = SessionTesting()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+class _client:
+    def __new__(cls,
+                app: FastAPI,
+                headers: Mapping[str, Any] = None,
+                **kwargs):
+        __client = TestClient(app, **kwargs)
+        __client.headers = headers
+        return __client
+
+
+def pytest_configure(config):
     """
-    Create a fresh database on each test case.
+    Allows plugins and conftest files to perform initial configuration.
+    This hook is called for every plugin and initial conftest
+    file after command line options have been parsed.
     """
-    Base.metadata.create_all(test_engine)  # Create the tables.
-    yield fastapi_app
-    Base.metadata.drop_all(test_engine)  # Drop tables.
-
-
-@pytest.fixture(scope="function")
-def db_session(app: FastAPI) -> Generator[SessionTesting, Any, None]:
-    connection = test_engine.connect()
-    transaction = connection.begin()
-    session = SessionTesting(bind=connection)
-    yield session  # use the session in tests.
-    session.close()
-    transaction.rollback()
-    connection.close()
-
-
-@pytest.fixture(scope="function")
-def client(
-        app: FastAPI, db_session: SessionTesting
-) -> Generator[TestClient, Any, None]:
-    """
-    Create a new FastAPI TestClient that uses the `db_session` fixture
-    to override the `get_db` dependency that is injected into routes.
-    """
-
-    def _get_test_db():
-        try:
-            yield db_session
-        finally:
-            pass
-
-    app.dependency_overrides[get_db] = _get_test_db
-    with TestClient(app) as _client:
-        yield _client
+    fastapi_app.dependency_overrides[get_db] = _get_test_db
+    Base.metadata.create_all(test_engine)
 
 
 def pytest_unconfigure(config):
     """Called before test process is exited."""
-    os.remove(BASE_DIR / "app" / "tests" / "test_db.sqlite3")
+    Base.metadata.drop_all(test_engine)
+    os.remove(DB_PATH)
 
 
 user_password = "Testpassword"
@@ -105,16 +93,12 @@ def auth_tokens(user):
 
 
 @pytest.fixture(scope="function")
-def auth_client(app, db_session, auth_tokens):
-    def _get_test_db():
-        try:
-            yield db_session
-        finally:
-            pass
+def client():
+    yield _client(fastapi_app)
 
-    app.dependency_overrides[get_db] = _get_test_db
-    with TestClient(app) as _client:
-        _client.headers = {
-            "Authorization": f"Bearer {auth_tokens['access_token']}"
-        }
-        yield _client
+
+@pytest.fixture(scope="function")
+def auth_client(auth_tokens):
+    yield _client(fastapi_app, headers={
+        "Authorization": f"Bearer {auth_tokens['access_token']}"
+    })

@@ -234,23 +234,23 @@ def get_file_url(user_id: int, image: UploadFile):
 
 
 @app.post("/api/users/me/image", response_model=schemas.UserRead)
-async def upload_profile_picture(image: UploadFile,
+async def upload_profile_picture(profile_picture: UploadFile,
                                  user_id: int = Depends(get_current_user_id),
                                  db: Session = Depends(get_db)):
     """
     Upload image for authenticated user.
     - **image**: image file.
     \f
-    :param image: Profile image user uploads.
+    :param profile_picture: Profile image user uploads.
     :param user_id: id of an authenticated user.
     :param db: session for IO operations with database.
-    :return:
+    :return: user info.
     """
-    path = get_file_path(user_id, image)
-    url = get_file_url(user_id, image)
+    path = get_file_path(user_id, profile_picture)
+    url = get_file_url(user_id, profile_picture)
 
     with open(path, "wb") as fp:
-        shutil.copyfileobj(image.file, fp)
+        shutil.copyfileobj(profile_picture.file, fp)
 
     user_service = UserService(db)
     user = user_service.update_profile_picture(user_id, url)
