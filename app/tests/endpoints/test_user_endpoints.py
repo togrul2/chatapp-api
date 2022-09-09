@@ -1,5 +1,6 @@
 import os
 import tempfile
+from urllib import parse
 
 import pytest
 from PIL import Image
@@ -136,8 +137,8 @@ class TestUsersMe:
 
     def test_modify_user(self, auth_client):
         payload = {
-            "username": "johndoe",
-            "email": "johndoe@gmail.com",
+            "username": "johndoe_new",
+            "email": "johndoe_new@gmail.com",
             "first_name": "John",
             "last_name": "Doe",
         }
@@ -164,10 +165,37 @@ class TestUsersMe:
 
         assert response.status_code == 200
         body = response.json()
-        path = BASE_DIR / "app" / body['profile_picture']
+        path = BASE_DIR / ("app" + body['profile_picture'])
         assert os.path.exists(path)
 
         # teardown
         os.remove(path)
         dir_path = BASE_DIR / "app" / "static" / str(user.id)
         os.rmdir(dir_path)
+
+    def test_delete_user(self, auth_client):
+        response = auth_client.delete(self.url)
+
+        assert response.status_code == 204
+
+
+class TestListUsers:
+    url = "/api/users"
+
+    def test_list_users(self, client):
+        response = client.get(self.url)
+        assert response.status_code == 200
+
+    def test_list_users_with_keyword(self, user, client):
+        # TODO needs to be more functional
+        params = parse.urlencode({'keyword': 'john'})
+        response = client.get(self.url, params=params)
+
+        assert response.status_code == 200
+
+
+class TestRetrieveUser:
+    def test_retrieve_user(self, client, user):
+        # TODO needs to be more functional
+        url = f"/api/users/{user.id}"
+        client.get(url)

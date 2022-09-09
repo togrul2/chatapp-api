@@ -26,8 +26,8 @@ Password field must match following pattern.
 
 
 class UserCreate(UserBase):
-    password: str = Field(regex="^[A-Z][\w@?!\-$]*$", min_length=6,
-                          description=password_desc)
+    password: str = Field(regex="^[A-Z][\w@?!\-$]*$",  # noqa: W605
+                          min_length=6, description=password_desc)
 
 
 class UserRead(UserBase):
