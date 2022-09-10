@@ -6,11 +6,6 @@ from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
 
 
-class DetailMessage(BaseModel):
-    """Detail schema for error messages."""
-    detail: str
-
-
 class UserBase(BaseModel):
     """User schema"""
     username: str = Field(min_length=6)

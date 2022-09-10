@@ -2,7 +2,6 @@
 Config and fixtures for tests.
 """
 import os
-import sys
 from typing import Mapping, Any
 
 import pytest
@@ -15,12 +14,11 @@ from config import BASE_DIR
 from jwt import create_refresh_token, create_access_token
 from main import app as fastapi_app
 from db import Base, get_db
-from schemas import UserCreate
+from schemas.user import UserCreate
 from services import UserService
 
 # this is to include backend dir in sys.path
 # so that we can import from db, main.py
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DB_PATH = BASE_DIR / 'test_db.sqlite3'
 
 SQLALCHEMY_TEST_DATABASE_URL = "sqlite:///" + str(DB_PATH)
@@ -50,7 +48,7 @@ class _client:
         return __client
 
 
-def pytest_configure(config):
+def pytest_configure(config):  # noqa
     """
     Allows plugins and conftest files to perform initial configuration.
     This hook is called for every plugin and initial conftest

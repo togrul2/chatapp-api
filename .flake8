@@ -4,6 +4,6 @@ exclude =
     .git,
     __pycache__,
     venv,
-    migrations
+    alembic
     __init__.py
 

@@ -4,13 +4,14 @@ JWT module with all stuff related to authentication via jwt.
 from datetime import datetime, timedelta
 from functools import partial
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 
 from config import (ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM,
                     REFRESH_TOKEN_EXPIRE_MINUTES, settings)
+from exceptions.user import CredentialsException, ExpiredTokenException
 
 password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -50,18 +51,6 @@ create_access_token = partial(_create_token, TokenType.ACCESS,
                               timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
 create_refresh_token = partial(_create_token, TokenType.REFRESH,
                                timedelta(minutes=REFRESH_TOKEN_EXPIRE_MINUTES))
-
-CredentialsException = HTTPException(
-    status_code=status.HTTP_401_UNAUTHORIZED,
-    detail="Could not validate credentials",
-    headers={"WWW-Authenticate": "Bearer"},
-)
-
-ExpiredTokenException = HTTPException(
-    status_code=status.HTTP_401_UNAUTHORIZED,
-    detail="Access token expired",
-    headers={"WWW-Authenticate": "Bearer"},
-)
 
 
 def _get_user_from_token(token_type: int, token: str) -> int:

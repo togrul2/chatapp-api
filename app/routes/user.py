@@ -1,20 +1,24 @@
+"""
+User related routes.
+"""
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, status, Form, UploadFile
 from fastapi.security import OAuth2PasswordRequestForm
 
-import schemas
 import jwt
-from services import UserService, get_user_service
+from services import (UserService, get_user_service, get_file_path,
+                      get_file_url, upload_static_file)
+from schemas.user import UserCreate, UserRead, UserBase, UserPartialUpdate
+from schemas.base import DetailMessage
 
 router = APIRouter()
 
 
 @router.post("/api/token", status_code=status.HTTP_201_CREATED,
-             response_model=schemas.TokenData,
              responses={
                  status.HTTP_401_UNAUTHORIZED: {
-                     "model": schemas.DetailMessage
+                     "model": DetailMessage
                  }
              })
 async def token(user_service: UserService = Depends(get_user_service),
@@ -24,7 +28,6 @@ async def token(user_service: UserService = Depends(get_user_service),
     - **username**: username of a user.
     - **password**: password of a user.
     \f
-
     :param credentials: User's credentials.
     :param user_service: service providing user model operations.
     """
@@ -38,10 +41,9 @@ async def token(user_service: UserService = Depends(get_user_service),
 
 
 @router.post("/api/refresh", status_code=status.HTTP_201_CREATED,
-             response_model=schemas.TokenData,
              responses={
                  status.HTTP_401_UNAUTHORIZED: {
-                     "model": schemas.DetailMessage
+                     "model": DetailMessage
                  }
              })
 async def refresh(refresh_token: str = Form(),
@@ -57,13 +59,13 @@ async def refresh(refresh_token: str = Form(),
 
 
 @router.post("/api/register", status_code=status.HTTP_201_CREATED,
-             response_model=schemas.UserRead,
+             response_model=UserRead,
              responses={
                  status.HTTP_400_BAD_REQUEST: {
-                     "model": schemas.DetailMessage
+                     "model": DetailMessage
                  }
              })
-async def register(data: schemas.UserCreate,
+async def register(data: UserCreate,
                    user_service: UserService = Depends(get_user_service)):
     """
     Create a user in database with given data:
@@ -79,7 +81,7 @@ async def register(data: schemas.UserCreate,
     return user_service.create(data)
 
 
-@router.get("/api/users/me", response_model=schemas.UserRead)
+@router.get("/api/users/me", response_model=UserRead)
 async def get_auth_user(user_id: int = Depends(jwt.get_current_user_id),
                         user_service: UserService = Depends(get_user_service)):
     """
@@ -92,14 +94,14 @@ async def get_auth_user(user_id: int = Depends(jwt.get_current_user_id),
     return user_service.get_or_404(user_id)
 
 
-@router.put("/api/users/me", response_model=schemas.UserRead,
+@router.put("/api/users/me", response_model=UserRead,
             responses={
                 status.HTTP_400_BAD_REQUEST: {
-                    "model": schemas.DetailMessage
+                    "model": DetailMessage
                 }
             })
 async def update_auth_user(
-        data: schemas.UserBase,
+        data: UserBase,
         user_id: int = Depends(jwt.get_current_user_id),
         user_service: UserService = Depends(get_user_service)):
     """
@@ -118,14 +120,14 @@ async def update_auth_user(
     return user_service.update(user_id, data)
 
 
-@router.patch("/api/users/me", response_model=schemas.UserRead,
+@router.patch("/api/users/me", response_model=UserRead,
               responses={
                   status.HTTP_400_BAD_REQUEST: {
-                      "model": schemas.DetailMessage
+                      "model": DetailMessage
                   }
               })
 async def partial_update_auth_user(
-        data: schemas.UserPartialUpdate,
+        data: UserPartialUpdate,
         user_id: int = Depends(jwt.get_current_user_id),
         user_service: UserService = Depends(get_user_service)):
     """
@@ -143,7 +145,7 @@ async def partial_update_auth_user(
     return user_service.update(user_id, data)
 
 
-@router.post("/api/users/me/image", response_model=schemas.UserRead)
+@router.post("/api/users/me/image", response_model=UserRead)
 async def upload_profile_picture(
         profile_picture: Optional[UploadFile] = None,
         user_id: int = Depends(jwt.get_current_user_id),
@@ -158,7 +160,10 @@ async def upload_profile_picture(
     :return: user info.
     """
     if profile_picture:
-        return user_service.update_profile_picture(user_id, profile_picture)
+        path = get_file_path(user_id, profile_picture)
+        url = get_file_url(user_id, profile_picture)
+        upload_static_file(path, profile_picture)
+        return user_service.update_profile_picture(user_id, url)
     return user_service.remove_profile_picture(user_id)
 
 
@@ -176,7 +181,7 @@ async def delete_auth_user(
     user_service.delete(user_id)
 
 
-@router.get("/api/users", response_model=List[schemas.UserRead])
+@router.get("/api/users", response_model=List[UserRead])
 async def get_users(keyword: Optional[str] = None,
                     user_service: UserService = Depends(get_user_service)):
     """
@@ -198,7 +203,12 @@ async def get_users(keyword: Optional[str] = None,
     return user_service.all()
 
 
-@router.get("/api/users/{username}", response_model=schemas.UserRead)
+@router.get("/api/users/{username}", response_model=UserRead,
+            responses={
+                status.HTTP_404_NOT_FOUND: {
+                    "model": DetailMessage
+                }
+            })
 async def get_user(username: str,
                    user_service: UserService = Depends(get_user_service)):
     """
@@ -209,4 +219,4 @@ async def get_user(username: str,
     :param user_service: service providing user model operations.
     :return: user with given id.
     """
-    return user_service.get_by_username(username)
+    return user_service.get_by_username_or_404(username)
