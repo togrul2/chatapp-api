@@ -1,6 +1,7 @@
 """
 Services module with crud tools for models.
 """
+import shutil
 from abc import ABC
 from typing import Any, Optional
 
@@ -8,6 +9,7 @@ from fastapi import HTTPException, status, Depends, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+import jwt
 from config import BASE_DIR
 from db import get_db
 from models import User
@@ -15,19 +17,23 @@ from jwt import get_hashed_password, verify_password
 from schemas import UserCreate, UserPartialUpdate, UserBase
 
 UsernameAlreadyTaken = HTTPException(
-    status_code=400,
+    status_code=status.HTTP_400_BAD_REQUEST,
     detail="User with given username already exists."
 )
 
 EmailAlreadyTaken = HTTPException(
-    status_code=400,
+    status_code=status.HTTP_400_BAD_REQUEST,
     detail="User with given email already exists."
+)
+
+NotFound = HTTPException(
+    status_code=status.HTTP_404_NOT_FOUND,
+    detail="Not found."
 )
 
 
 def get_file_path(user_id: int, image: UploadFile):
     """Generates path for user profile pictures."""
-
     base_path = BASE_DIR / "app" / "static" / str(user_id)
     base_path.mkdir(exist_ok=True, parents=True)
     return base_path / image.filename
@@ -36,6 +42,12 @@ def get_file_path(user_id: int, image: UploadFile):
 def get_file_url(user_id: int, image: UploadFile):
     """Returns url for file."""
     return f"/static/{user_id}/{image.filename}"
+
+
+def upload_static_file(path: str, file: UploadFile):
+    """Uploads file to given path"""
+    with open(path, "wb") as fp:
+        shutil.copyfileobj(file.file, fp)
 
 
 class BaseService(ABC):
@@ -57,7 +69,7 @@ class BaseService(ABC):
     def __init__(self, db: Session):
         self.db = db
 
-    def get_by_pk(self, pk: Any) -> Any:
+    def _get_by_pk(self, pk: Any) -> Any:
         return self.db.query(self.model).get(pk)
 
     def all(self):
@@ -68,12 +80,9 @@ class BaseService(ABC):
         Returns item matching the query. If item is not found
         raises HTTPException with status code of 404.
         """
-        item = self.get_by_pk(pk)
+        item = self._get_by_pk(pk)
         if item is None:
-            raise HTTPException(
-                status_code=404,
-                detail="Not found."
-            )
+            raise NotFound
         return item
 
     def create(self, fields: BaseModel) -> Any:
@@ -130,6 +139,12 @@ class UserService(BaseService):
         """Returns user with matching username"""
         return self.db.query(self.model).filter_by(username=username).first()
 
+    def get_by_username(self, username: str):
+        user = self._get_by_username(username)
+        if user is None:
+            raise NotFound
+        return user
+
     def create(self, fields: UserCreate):
         """Creates user with hashed password."""
         self._validate_username_uniqueness(fields.username)
@@ -145,15 +160,28 @@ class UserService(BaseService):
             (self.model.email.like(email))
         ).all()
 
-    def update_profile_picture(self, user_id: int, path: str):
-        user = self.get_by_pk(user_id)
-        user.profile_picture = path
+    def update_profile_picture(self, user_id: int,
+                               profile_picture: UploadFile):
+        """
+        Uploads image to static files and sets it
+        as a profile picture of a user.
+        """
+        path = get_file_path(user_id, profile_picture)
+        url = get_file_url(user_id, profile_picture)
+        upload_static_file(path, profile_picture)
+
+        user = self.get_or_404(user_id)
+        user.profile_picture = url
         self.db.commit()
         self.db.refresh(user)
         return user
 
     def remove_profile_picture(self, user_id: int):
-        user = self.get_by_pk(user_id)
+        """
+        Sets user's profile picture to null.
+        It doesn't delete file from storage.
+        """
+        user = self.get_or_404(user_id)
         user.profile_picture = None
         self.db.commit()
         self.db.refresh(user)
@@ -168,6 +196,16 @@ class UserService(BaseService):
                 detail="Invalid username or password"
             )
         return user
+
+    def refresh_tokens(self, refresh_token: str):
+        user_id = jwt.verify_refresh_token(refresh_token)
+        if self._get_by_pk(user_id) is None:
+            raise jwt.CredentialsException
+
+        return {
+            "access_token": jwt.create_access_token(user_id),
+            "refresh_token": jwt.create_refresh_token(user_id)
+        }
 
     def update(self, pk, fields: UserPartialUpdate | UserBase) -> Any:
         # Validate uniqueness of username and email,

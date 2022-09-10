@@ -32,7 +32,7 @@ def verify_password(password: str, hashed_pass: str) -> bool:
     return password_context.verify(password, hashed_pass)
 
 
-def _create_token(type_: int, expires_delta, user_id: int):
+def _create_token(type_: int, expires_delta, user_id: int) -> str:
     """
     Base function for creating tokens with given type,
     user_id and expiration time.
@@ -56,6 +56,7 @@ CredentialsException = HTTPException(
     detail="Could not validate credentials",
     headers={"WWW-Authenticate": "Bearer"},
 )
+
 ExpiredTokenException = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
     detail="Access token expired",
@@ -63,7 +64,7 @@ ExpiredTokenException = HTTPException(
 )
 
 
-def _get_user_from_token(token_type: int, token: str):
+def _get_user_from_token(token_type: int, token: str) -> int:
     """Base function for retrieving user's id from token."""
     try:
         payload = jwt.decode(token, settings.secret_key,
@@ -83,8 +84,8 @@ def _get_user_from_token(token_type: int, token: str):
         raise CredentialsException
 
 
-async def get_current_user_id(token: str = Depends(oauth2_scheme)):
+async def get_current_user_id(token: str = Depends(oauth2_scheme)) -> int:
     return _get_user_from_token(TokenType.ACCESS, token)
 
 
-verify_refresh = partial(_get_user_from_token, TokenType.REFRESH)
+verify_refresh_token = partial(_get_user_from_token, TokenType.REFRESH)

@@ -6,8 +6,13 @@ from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
 
 
+class DetailMessage(BaseModel):
+    """Detail schema for error messages."""
+    detail: str
+
+
 class UserBase(BaseModel):
-    """User model"""
+    """User schema"""
     username: str = Field(min_length=6)
     email: EmailStr
     first_name: str = Field(min_length=2)
@@ -44,8 +49,4 @@ class UserPartialUpdate(UserBase):
 
 class TokenData(BaseModel):
     access_token: str
-    refresh_token: str
-
-
-class RefreshData(BaseModel):
     refresh_token: str

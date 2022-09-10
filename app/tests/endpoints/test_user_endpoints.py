@@ -182,20 +182,29 @@ class TestUsersMe:
 class TestListUsers:
     url = "/api/users"
 
-    def test_list_users(self, client):
+    def test_list_users(self, client, user):
         response = client.get(self.url)
+
         assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 2
 
     def test_list_users_with_keyword(self, user, client):
-        # TODO needs to be more functional
         params = parse.urlencode({'keyword': 'john'})
         response = client.get(self.url, params=params)
 
         assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 1
 
 
 class TestRetrieveUser:
     def test_retrieve_user(self, client, user):
-        # TODO needs to be more functional
-        url = f"/api/users/{user.id}"
-        client.get(url)
+        url = f"/api/users/{user.username}"
+        response = client.get(url)
+        assert response.status_code == 200
+
+    def test_retrieve_user_not_found(self, client, user):
+        url = "/api/users/dummyuser"
+        response = client.get(url)
+        assert response.status_code == 404

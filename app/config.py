@@ -17,7 +17,7 @@ ALGORITHM = "HS256"
 
 
 class Settings(BaseSettings):
-    """Settings fro env variables."""
+    """Settings for env variables."""
     secret_key: str
     db_url: str
 

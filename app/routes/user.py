@@ -1,4 +1,3 @@
-import shutil
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, status, Form, UploadFile
@@ -6,14 +5,18 @@ from fastapi.security import OAuth2PasswordRequestForm
 
 import schemas
 import jwt
-from services import (UserService, get_user_service,
-                      get_file_path, get_file_url)
+from services import UserService, get_user_service
 
 router = APIRouter()
 
 
 @router.post("/api/token", status_code=status.HTTP_201_CREATED,
-             response_model=schemas.TokenData)
+             response_model=schemas.TokenData,
+             responses={
+                 status.HTTP_401_UNAUTHORIZED: {
+                     "model": schemas.DetailMessage
+                 }
+             })
 async def token(user_service: UserService = Depends(get_user_service),
                 credentials: OAuth2PasswordRequestForm = Depends()):
     """
@@ -35,7 +38,12 @@ async def token(user_service: UserService = Depends(get_user_service),
 
 
 @router.post("/api/refresh", status_code=status.HTTP_201_CREATED,
-             response_model=schemas.TokenData)
+             response_model=schemas.TokenData,
+             responses={
+                 status.HTTP_401_UNAUTHORIZED: {
+                     "model": schemas.DetailMessage
+                 }
+             })
 async def refresh(refresh_token: str = Form(),
                   user_service: UserService = Depends(get_user_service)):
     """
@@ -45,18 +53,16 @@ async def refresh(refresh_token: str = Form(),
     :param refresh_token: refresh token of a user.
     :param user_service: service providing user model operations.
     """
-    user_id = jwt.verify_refresh(refresh_token)
-    if user_service.get_by_pk(user_id) is None:
-        raise jwt.CredentialsException
-
-    return {
-        "access_token": jwt.create_access_token(user_id),
-        "refresh_token": jwt.create_refresh_token(user_id)
-    }
+    return user_service.refresh_tokens(refresh_token)
 
 
 @router.post("/api/register", status_code=status.HTTP_201_CREATED,
-             response_model=schemas.UserRead)
+             response_model=schemas.UserRead,
+             responses={
+                 status.HTTP_400_BAD_REQUEST: {
+                     "model": schemas.DetailMessage
+                 }
+             })
 async def register(data: schemas.UserCreate,
                    user_service: UserService = Depends(get_user_service)):
     """
@@ -83,10 +89,15 @@ async def get_auth_user(user_id: int = Depends(jwt.get_current_user_id),
     :param user_service: service providing user model operations.
     :return: Auth user's data.
     """
-    return user_service.get_by_pk(user_id)
+    return user_service.get_or_404(user_id)
 
 
-@router.put("/api/users/me", response_model=schemas.UserRead)
+@router.put("/api/users/me", response_model=schemas.UserRead,
+            responses={
+                status.HTTP_400_BAD_REQUEST: {
+                    "model": schemas.DetailMessage
+                }
+            })
 async def update_auth_user(
         data: schemas.UserBase,
         user_id: int = Depends(jwt.get_current_user_id),
@@ -107,7 +118,12 @@ async def update_auth_user(
     return user_service.update(user_id, data)
 
 
-@router.patch("/api/users/me", response_model=schemas.UserRead)
+@router.patch("/api/users/me", response_model=schemas.UserRead,
+              responses={
+                  status.HTTP_400_BAD_REQUEST: {
+                      "model": schemas.DetailMessage
+                  }
+              })
 async def partial_update_auth_user(
         data: schemas.UserPartialUpdate,
         user_id: int = Depends(jwt.get_current_user_id),
@@ -141,18 +157,9 @@ async def upload_profile_picture(
     :param user_service: service providing user model operations.
     :return: user info.
     """
-
     if profile_picture:
-        path = get_file_path(user_id, profile_picture)
-        url = get_file_url(user_id, profile_picture)
-        with open(path, "wb") as fp:
-            shutil.copyfileobj(profile_picture.file, fp)
-
-        user = user_service.update_profile_picture(user_id, url)
-    else:
-        user = user_service.remove_profile_picture(user_id)
-
-    return user
+        return user_service.update_profile_picture(user_id, profile_picture)
+    return user_service.remove_profile_picture(user_id)
 
 
 @router.delete("/api/users/me", status_code=status.HTTP_204_NO_CONTENT)
@@ -162,6 +169,7 @@ async def delete_auth_user(
     """
     Deletes authenticated user's data or returns 401 if unauthenticated.
     \f
+    Here we return response with empty body, so no return value needed.
     :param user_id: id of authenticated user
     :param user_service: service providing user model operations.
     """
@@ -184,20 +192,21 @@ async def get_users(keyword: Optional[str] = None,
     # If we have a present keyword, we would filter result,
     # otherwise send all data.
     if keyword:
-        return user_service.filter_by_username_or_email(keyword, keyword)
-    else:
-        return user_service.all()
+        expression = keyword + "%"
+        return user_service.filter_by_username_or_email(expression, expression)
+
+    return user_service.all()
 
 
-@router.get("/api/users/{user_id}", response_model=schemas.UserRead)
-async def get_user(user_id: int,
+@router.get("/api/users/{username}", response_model=schemas.UserRead)
+async def get_user(username: str,
                    user_service: UserService = Depends(get_user_service)):
     """
     Returns user with corresponding id or returns 404 error.
     - **user_id**: id of a user.
     \f
-    :param user_id: id of a user.
+    :param username: username of a user.
     :param user_service: service providing user model operations.
     :return: user with given id.
     """
-    return user_service.get_or_404(user_id)
+    return user_service.get_by_username(username)
