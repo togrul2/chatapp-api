@@ -6,11 +6,12 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, status, Form, UploadFile
 from fastapi.security import OAuth2PasswordRequestForm
 
-import jwt
-from services import (UserService, get_user_service, get_file_path,
-                      get_file_url, upload_static_file)
+import authentication
 from schemas.user import UserCreate, UserRead, UserBase, UserPartialUpdate
 from schemas.base import DetailMessage
+from services.base import upload_static_file
+from services.user import (UserService, get_user_service, get_pfp_path,
+                           get_pfp_url)
 
 router = APIRouter()
 
@@ -35,8 +36,8 @@ async def token(user_service: UserService = Depends(get_user_service),
                                           credentials.password)
 
     return {
-        "access_token": jwt.create_access_token(user.id),
-        "refresh_token": jwt.create_refresh_token(user.id)
+        "access_token": authentication.create_access_token(user.id),
+        "refresh_token": authentication.create_refresh_token(user.id)
     }
 
 
@@ -82,8 +83,9 @@ async def register(data: UserCreate,
 
 
 @router.get("/api/users/me", response_model=UserRead)
-async def get_auth_user(user_id: int = Depends(jwt.get_current_user_id),
-                        user_service: UserService = Depends(get_user_service)):
+async def get_auth_user(
+        user_id: int = Depends(authentication.get_current_user_id),
+        user_service: UserService = Depends(get_user_service)):
     """
     Returns authenticated user's data or returns 401 if unauthenticated.
     \f
@@ -102,7 +104,7 @@ async def get_auth_user(user_id: int = Depends(jwt.get_current_user_id),
             })
 async def update_auth_user(
         data: UserBase,
-        user_id: int = Depends(jwt.get_current_user_id),
+        user_id: int = Depends(authentication.get_current_user_id),
         user_service: UserService = Depends(get_user_service)):
     """
     Updates authenticated user's data,
@@ -128,7 +130,7 @@ async def update_auth_user(
               })
 async def partial_update_auth_user(
         data: UserPartialUpdate,
-        user_id: int = Depends(jwt.get_current_user_id),
+        user_id: int = Depends(authentication.get_current_user_id),
         user_service: UserService = Depends(get_user_service)):
     """
     Partially updates authenticated user's data,
@@ -148,7 +150,7 @@ async def partial_update_auth_user(
 @router.post("/api/users/me/image", response_model=UserRead)
 async def upload_profile_picture(
         profile_picture: Optional[UploadFile] = None,
-        user_id: int = Depends(jwt.get_current_user_id),
+        user_id: int = Depends(authentication.get_current_user_id),
         user_service: UserService = Depends(get_user_service)):
     """
     Upload image for authenticated user.
@@ -160,8 +162,8 @@ async def upload_profile_picture(
     :return: user info.
     """
     if profile_picture:
-        path = get_file_path(user_id, profile_picture)
-        url = get_file_url(user_id, profile_picture)
+        path = get_pfp_path(user_id, profile_picture)
+        url = get_pfp_url(user_id, profile_picture)
         upload_static_file(path, profile_picture)
         return user_service.update_profile_picture(user_id, url)
     return user_service.remove_profile_picture(user_id)
@@ -169,7 +171,7 @@ async def upload_profile_picture(
 
 @router.delete("/api/users/me", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_auth_user(
-        user_id: int = Depends(jwt.get_current_user_id),
+        user_id: int = Depends(authentication.get_current_user_id),
         user_service: UserService = Depends(get_user_service)):
     """
     Deletes authenticated user's data or returns 401 if unauthenticated.

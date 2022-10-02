@@ -51,6 +51,9 @@ class User(Base):
     chats = relationship('Chat', secondary='membership',
                          back_populates='users')
 
+    def __repr__(self):
+        return f"User(id: {self.id}, username: {self.username})"
+
 
 class Chat(Base):
     """Chat model"""

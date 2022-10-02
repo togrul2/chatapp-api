@@ -1,5 +1,5 @@
 """
-JWT module with all stuff related to authentication via jwt.
+Authentication module with all stuff related to authentication via jwt.
 """
 from datetime import datetime, timedelta
 from functools import partial
@@ -13,9 +13,9 @@ from config import (ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM,
                     REFRESH_TOKEN_EXPIRE_MINUTES, settings)
 from exceptions.user import CredentialsException, ExpiredTokenException
 
-password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+password_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl='api/token')
 
 
 class TokenType:
@@ -39,9 +39,9 @@ def _create_token(type_: int, expires_delta, user_id: int) -> str:
     user_id and expiration time.
     """
     expire = datetime.utcnow() + expires_delta
-    to_encode = {"user_id": user_id,
-                 "expire": expire.isoformat(),
-                 "type": type_}
+    to_encode = {'user_id': user_id,
+                 'expire': expire.isoformat(),
+                 'type': type_}
     encoded_jwt = jwt.encode(to_encode, settings.secret_key,
                              algorithm=ALGORITHM)
     return encoded_jwt
@@ -58,14 +58,14 @@ def _get_user_from_token(token_type: int, token: str) -> int:
     try:
         payload = jwt.decode(token, settings.secret_key,
                              algorithms=[ALGORITHM])
-        expire = datetime.fromisoformat(payload.get("expire"))
+        expire = datetime.fromisoformat(payload.get('expire'))
         type_ = payload.get("type")
 
         if type_ != token_type:
             raise CredentialsException
 
         if expire > datetime.utcnow():
-            user_id = payload.get("user_id")
+            user_id = payload.get('user_id')
             return user_id
         else:
             raise ExpiredTokenException

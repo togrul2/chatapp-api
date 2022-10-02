@@ -11,11 +11,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from config import BASE_DIR
-from jwt import create_refresh_token, create_access_token
+from authentication import create_refresh_token, create_access_token
 from main import app as fastapi_app
 from db import Base, get_db
 from schemas.user import UserCreate
-from services import UserService
+from services.user import UserService
 
 # this is to include backend dir in sys.path
 # so that we can import from db, main.py
@@ -90,12 +90,12 @@ def auth_tokens(user):
     }
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def client():
     yield _client(fastapi_app)
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture()
 def auth_client(auth_tokens):
     yield _client(fastapi_app, headers={
         "Authorization": f"Bearer {auth_tokens['access_token']}"
