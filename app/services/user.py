@@ -1,3 +1,4 @@
+"""User services module."""
 from functools import partial
 from typing import Any, Optional
 
@@ -121,8 +122,8 @@ class UserService(BaseService):
             'refresh_token': authentication.create_refresh_token(user_id)
         }
 
-    def update(self, pk, schema: user_schemas.UserPartialUpdate |
-                                 user_schemas.UserBase) -> Any:
+    def update(self, pk, schema: (user_schemas.UserPartialUpdate |
+                                  user_schemas.UserBase)) -> Any:
         # Validate uniqueness of username and email,
         # if they are not met, these validation methods will raise exceptions
         self._validate_username_uniqueness(schema.username, pk)

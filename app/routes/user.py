@@ -1,6 +1,4 @@
-"""
-User related routes.
-"""
+"""User related routes."""
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, status, Form, UploadFile
@@ -13,13 +11,13 @@ from services.base import upload_static_file
 from services.user import (UserService, get_user_service, get_pfp_path,
                            get_pfp_url)
 
-router = APIRouter()
+router = APIRouter(prefix='/api', tags=["user"])
 
 
-@router.post("/api/token", status_code=status.HTTP_201_CREATED,
+@router.post('/token', status_code=status.HTTP_201_CREATED,
              responses={
                  status.HTTP_401_UNAUTHORIZED: {
-                     "model": DetailMessage
+                     'model': DetailMessage
                  }
              })
 async def token(user_service: UserService = Depends(get_user_service),
@@ -36,15 +34,15 @@ async def token(user_service: UserService = Depends(get_user_service),
                                           credentials.password)
 
     return {
-        "access_token": authentication.create_access_token(user.id),
-        "refresh_token": authentication.create_refresh_token(user.id)
+        'access_token': authentication.create_access_token(user.id),
+        'refresh_token': authentication.create_refresh_token(user.id)
     }
 
 
-@router.post("/api/refresh", status_code=status.HTTP_201_CREATED,
+@router.post('/refresh', status_code=status.HTTP_201_CREATED,
              responses={
                  status.HTTP_401_UNAUTHORIZED: {
-                     "model": DetailMessage
+                     'model': DetailMessage
                  }
              })
 async def refresh(refresh_token: str = Form(),
@@ -59,15 +57,37 @@ async def refresh(refresh_token: str = Form(),
     return user_service.refresh_tokens(refresh_token)
 
 
-@router.post("/api/register", status_code=status.HTTP_201_CREATED,
+@router.get('/users', response_model=List[UserRead])
+async def get_users(keyword: Optional[str] = None,
+                    user_service: UserService = Depends(get_user_service)):
+    """
+    Lists users, also can perform search with keyword
+    which will be compared to users' username and password.
+    - **keyword**: keyword url parameter which will be
+        used to find users with matching username or password.
+    \f
+    :param keyword: query param for user search.
+    :param user_service: service providing user model operations.
+    :return: List of searched users.
+    """
+    # If we have a present keyword, we would filter result,
+    # otherwise send all data.
+    if keyword:
+        expression = keyword + '%'
+        return user_service.filter_by_username_or_email(expression, expression)
+
+    return user_service.all()
+
+
+@router.post('/users', status_code=status.HTTP_201_CREATED,
              response_model=UserRead,
              responses={
                  status.HTTP_400_BAD_REQUEST: {
-                     "model": DetailMessage
+                     'model': DetailMessage
                  }
              })
-async def register(data: UserCreate,
-                   user_service: UserService = Depends(get_user_service)):
+async def create_user(data: UserCreate,
+                      user_service: UserService = Depends(get_user_service)):
     """
     Create a user in database with given data:
     - **username**: unique name
@@ -82,7 +102,7 @@ async def register(data: UserCreate,
     return user_service.create(data)
 
 
-@router.get("/api/users/me", response_model=UserRead)
+@router.get('/users/me', response_model=UserRead)
 async def get_auth_user(
         user_id: int = Depends(authentication.get_current_user_id),
         user_service: UserService = Depends(get_user_service)):
@@ -96,10 +116,10 @@ async def get_auth_user(
     return user_service.get_or_404(user_id)
 
 
-@router.put("/api/users/me", response_model=UserRead,
+@router.put('/users/me', response_model=UserRead,
             responses={
                 status.HTTP_400_BAD_REQUEST: {
-                    "model": DetailMessage
+                    'model': DetailMessage
                 }
             })
 async def update_auth_user(
@@ -122,10 +142,10 @@ async def update_auth_user(
     return user_service.update(user_id, data)
 
 
-@router.patch("/api/users/me", response_model=UserRead,
+@router.patch('/users/me', response_model=UserRead,
               responses={
                   status.HTTP_400_BAD_REQUEST: {
-                      "model": DetailMessage
+                      'model': DetailMessage
                   }
               })
 async def partial_update_auth_user(
@@ -147,9 +167,9 @@ async def partial_update_auth_user(
     return user_service.update(user_id, data)
 
 
-@router.post("/api/users/me/image", response_model=UserRead)
+@router.post('/users/me/image', response_model=UserRead)
 async def upload_profile_picture(
-        profile_picture: Optional[UploadFile] = None,
+        profile_picture: UploadFile,
         user_id: int = Depends(authentication.get_current_user_id),
         user_service: UserService = Depends(get_user_service)):
     """
@@ -161,15 +181,26 @@ async def upload_profile_picture(
     :param user_service: service providing user model operations.
     :return: user info.
     """
-    if profile_picture:
-        path = get_pfp_path(user_id, profile_picture)
-        url = get_pfp_url(user_id, profile_picture)
-        upload_static_file(path, profile_picture)
-        return user_service.update_profile_picture(user_id, url)
-    return user_service.remove_profile_picture(user_id)
+    path = get_pfp_path(user_id, profile_picture)
+    url = get_pfp_url(user_id, profile_picture)
+    upload_static_file(path, profile_picture)
+    return user_service.update_profile_picture(user_id, url)
 
 
-@router.delete("/api/users/me", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete('/users/me/image', status_code=status.HTTP_204_NO_CONTENT)
+async def remove_profile_picture(
+        user_id: int = Depends(authentication.get_current_user_id),
+        user_service: UserService = Depends(get_user_service)):
+    """
+    Remove profile picture for authenticated user.
+    \f
+    :param user_id: id of an authenticated user.
+    :param user_service: service providing user model operations.
+    """
+    user_service.remove_profile_picture(user_id)
+
+
+@router.delete('/users/me', status_code=status.HTTP_204_NO_CONTENT)
 async def delete_auth_user(
         user_id: int = Depends(authentication.get_current_user_id),
         user_service: UserService = Depends(get_user_service)):
@@ -183,32 +214,12 @@ async def delete_auth_user(
     user_service.delete(user_id)
 
 
-@router.get("/api/users", response_model=List[UserRead])
-async def get_users(keyword: Optional[str] = None,
-                    user_service: UserService = Depends(get_user_service)):
-    """
-    Lists users, also can perform search with keyword
-    which will be compared to users' username and password.
-    - **keyword**: keyword url parameter which will be
-        used to find users with matching username or password.
-    \f
-    :param keyword: query param for user search.
-    :param user_service: service providing user model operations.
-    :return: List of searched users.
-    """
-    # If we have a present keyword, we would filter result,
-    # otherwise send all data.
-    if keyword:
-        expression = keyword + "%"
-        return user_service.filter_by_username_or_email(expression, expression)
+# TODO add retrieve user by id
 
-    return user_service.all()
-
-
-@router.get("/api/users/{username}", response_model=UserRead,
+@router.get('/users/{username}', response_model=UserRead,
             responses={
                 status.HTTP_404_NOT_FOUND: {
-                    "model": DetailMessage
+                    'model': DetailMessage
                 }
             })
 async def get_user(username: str,

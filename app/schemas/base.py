@@ -1,3 +1,4 @@
+"""Base schemas module."""
 from pydantic import BaseModel
 
 

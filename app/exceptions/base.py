@@ -1,3 +1,4 @@
+"""Base exceptions module."""
 from fastapi import HTTPException, status
 
 NotFound = HTTPException(

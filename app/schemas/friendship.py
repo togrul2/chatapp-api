@@ -1,29 +1,31 @@
 from datetime import datetime
+from typing import Optional
 
-from fastapi import Depends
-from pydantic import BaseModel, validator
+from pydantic import BaseModel
 
-from services import UserService, get_user_service
+from schemas.user import UserRead
 
 
 class FriendshipBase(BaseModel):
     receiver_id: int
 
-    @validator('receiver_id')
-    def validate_receiver_existence(
-            self, value: int,
-            user_service: UserService = Depends(get_user_service)):
-        user_service.get_or_404(value)
+    class Config:
+        orm_mode = True
 
 
 class FriendshipRead(FriendshipBase):
     id: int
     sender_id: int
-    accepted: bool
+    accepted: Optional[bool]
     created_at: datetime
 
-    @validator('sender_id')
-    def validate_sender_existence(
-            self, value: int,
-            user_service: UserService = Depends(get_user_service)):
-        user_service.get_or_404(value)
+
+class FriendshipReadWithSender(FriendshipBase):
+    id: int
+    accepted: Optional[bool]
+    created_at: datetime
+    sender: UserRead
+
+
+class FriendshipCreate(FriendshipBase):
+    sender_id: int

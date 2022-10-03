@@ -1,13 +1,14 @@
+"""Base services module."""
 import shutil
 from abc import ABC
 from dataclasses import dataclass
-from typing import ClassVar, Any, Optional, Mapping
+from typing import ClassVar, Any, Generator
 
 from fastapi import UploadFile, Depends
 from sqlalchemy.orm import Session
 
 from db import get_db
-from exceptions import base as base_exception
+from exceptions import base as base_exceptions
 from schemas.base import BaseModel
 
 
@@ -37,7 +38,7 @@ class BaseService(ABC):
         """Returns item with matching pk. If nothing found raises NotFound."""
         item = self._get_by_pk(pk)
         if item is None:
-            raise base_exception.NotFound
+            raise base_exceptions.NotFound
         return item
 
     def create(self, schema: BaseModel) -> Any:
@@ -66,14 +67,14 @@ class BaseService(ABC):
         self.db.commit()
 
 
-def upload_static_file(path: str, file: UploadFile):
+def upload_static_file(path: str, file: UploadFile) -> None:
     """Uploads file to given path"""
     with open(path, "wb") as fp:
         shutil.copyfileobj(file.file, fp)
 
 
-def get_service(service: type(type(BaseService)),
-                db: Session = Depends(get_db)):
+def get_service(service: type(type(BaseService)), db: Session = Depends(get_db)
+                ) -> Generator[BaseService, None, None]:
     """
     Base function for creating service dependency
     for using with fastapi dependency injection tool.

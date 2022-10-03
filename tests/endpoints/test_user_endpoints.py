@@ -1,20 +1,23 @@
+"""Tests for user endpoints."""
 import os
 import tempfile
 from urllib import parse
 
 import pytest
+from fastapi import status
 from PIL import Image
 
 from config import BASE_DIR
 from authentication import create_refresh_token, create_access_token
-from exceptions.user import CredentialsException
+from exceptions.user import (CredentialsException, UsernameAlreadyTaken,
+                             EmailAlreadyTaken)
 from services.user import get_pfp_dir
 from tests.conftest import user_password
 
 
 class TestRegisterUser:
     """Class for testing register endpoint."""
-    url = '/api/register'
+    url = '/api/users'
     user_data = {
         'username': 'peterdoe',
         'email': 'peterdoe@example.com',
@@ -27,7 +30,7 @@ class TestRegisterUser:
         """Test successful user register."""
         response = client.post(self.url, json=self.user_data)
 
-        assert response.status_code == 201
+        assert response.status_code == status.HTTP_201_CREATED
         body = response.json()
 
         assert body['username'] == self.user_data['username']
@@ -42,7 +45,7 @@ class TestRegisterUser:
             'password': 'dummy_pass'
         })
 
-        assert response.status_code == 422
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
     def test_register_user_with_existing_username(self, client, user):
         """Test registering user with existing username."""
@@ -51,9 +54,8 @@ class TestRegisterUser:
             'email': 'peterdoe2@example.com',
         })
 
-        assert response.status_code == 400
-        assert (response.json()['detail'] ==
-                'User with given username already exists.')
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.json()['detail'] == UsernameAlreadyTaken.detail
 
     def test_register_user_with_existing_email(self, client, user):
         """Test registering user with existing email."""
@@ -62,9 +64,8 @@ class TestRegisterUser:
             'username': 'peterdoe2'
         })
 
-        assert response.status_code == 400
-        assert (response.json()['detail'] ==
-                'User with given email already exists.')
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.json()['detail'] == EmailAlreadyTaken.detail
 
 
 class TestToken:
@@ -80,7 +81,7 @@ class TestToken:
         }
         response = client.post(self.token_url, data=user_data)
 
-        assert response.status_code == 201
+        assert response.status_code == status.HTTP_201_CREATED
         assert response.json().keys() == frozenset({'access_token',
                                                     'refresh_token'})
 
@@ -92,7 +93,7 @@ class TestToken:
         }
         response = client.post(self.token_url, data=user_data)
 
-        assert response.status_code == 401
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
         assert response.json()['detail'] == CredentialsException.detail
 
     def test_refresh_success(self, client, user):
@@ -101,7 +102,7 @@ class TestToken:
         response = client.post(self.refresh_url,
                                data={'refresh_token': refresh_token})
 
-        assert response.status_code == 201
+        assert response.status_code == status.HTTP_201_CREATED
         assert response.json().keys() == frozenset({'access_token',
                                                     'refresh_token'})
 
@@ -111,8 +112,8 @@ class TestToken:
         response = client.post(self.refresh_url,
                                data={'refresh_token': refresh_token})
 
-        assert response.status_code == 401
-        assert response.json()['detail'] == 'Could not validate credentials'
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        assert response.json()['detail'] == CredentialsException.detail
 
 
 class TestUsersMe:
@@ -131,11 +132,11 @@ class TestUsersMe:
 
     def test_get_user_successful(self, auth_client):
         response = auth_client.get(self.url)
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
 
     def test_get_user_unauthenticated(self, client):
         response = client.get(self.url)
-        assert response.status_code == 401
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
     def test_modify_user(self, auth_client):
         payload = {
@@ -146,7 +147,7 @@ class TestUsersMe:
         }
         response = auth_client.put(self.url, json=payload)
 
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
         body = response.json()
         for field in payload:
             assert body[field] == payload[field]
@@ -157,7 +158,7 @@ class TestUsersMe:
         }
         response = auth_client.patch(self.url, json=payload)
 
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
         body = response.json()
         assert body['username'] == payload['username']
 
@@ -165,7 +166,7 @@ class TestUsersMe:
         files = {'profile_picture': profile_picture}
         response = auth_client.post(self.image_url, files=files)
 
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
         body = response.json()
         path = BASE_DIR / ('app' + body['profile_picture'])
         assert os.path.exists(path)
@@ -175,10 +176,14 @@ class TestUsersMe:
         dir_path = get_pfp_dir(user.id)
         os.rmdir(dir_path)
 
+    def test_image_remove(self, user, auth_client):
+        response = auth_client.delete(self.image_url)
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+
     def test_delete_user(self, auth_client):
         response = auth_client.delete(self.url)
 
-        assert response.status_code == 204
+        assert response.status_code == status.HTTP_204_NO_CONTENT
 
 
 class TestListUsers:
@@ -187,7 +192,7 @@ class TestListUsers:
     def test_list_users(self, client, user):
         response = client.get(self.url)
 
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
         body = response.json()
         assert len(body) == 2
 
@@ -195,7 +200,7 @@ class TestListUsers:
         params = parse.urlencode({'keyword': 'john'})
         response = client.get(self.url, params=params)
 
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
         body = response.json()
         assert len(body) == 1
 
@@ -208,8 +213,8 @@ class TestRetrieveUser:
 
     def test_retrieve_user(self, client, user):
         response = client.get(self.get_url(user.username))
-        assert response.status_code == 200
+        assert response.status_code == status.HTTP_200_OK
 
     def test_retrieve_user_not_found(self, client, user):
         response = client.get(self.get_url('dummyuser'))
-        assert response.status_code == 404
+        assert response.status_code == status.HTTP_404_NOT_FOUND
