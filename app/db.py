@@ -1,12 +1,15 @@
 """
-Db module with database config and declaration.
+DB module with database config and declaration.
 """
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from config import settings
 
-engine = create_engine(settings.db_url)
+db_url = 'postgresql+psycopg2://{}:{}@{}:{}/{}'.format(
+    settings.postgres_user, settings.postgres_password,
+    settings.postgres_host, settings.postgres_port, settings.postgres_db)
+engine = create_engine(db_url)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()

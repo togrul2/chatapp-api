@@ -19,7 +19,11 @@ ALGORITHM = 'HS256'
 class Settings(BaseSettings):
     """Settings for env variables."""
     secret_key: str
-    db_url: str
+    postgres_db: str
+    postgres_host: str
+    postgres_port: str = 5432
+    postgres_user: str
+    postgres_password: str
 
 
 settings = Settings()
