@@ -1,8 +1,7 @@
 """Base services module."""
 import shutil
-from abc import ABC
 from dataclasses import dataclass
-from typing import ClassVar, Any, Generator
+from typing import ClassVar, Any, Generator, Callable
 
 from fastapi import UploadFile, Depends
 from sqlalchemy.orm import Session
@@ -13,13 +12,13 @@ from schemas.base import BaseModel
 
 
 @dataclass
-class BaseService(ABC):
+class BaseService:
     """
     Base service class with database operation for models.
 
     Inheriting class must override following fields: model.
 
-    class SampleService(BaseService):
+    class SampleService(CreateServiceMixin, BaseService):
         model = SampleModel
 
     """
@@ -41,12 +40,41 @@ class BaseService(ABC):
             raise base_exceptions.NotFound
         return item
 
+
+def upload_static_file(path: str, file: UploadFile) -> None:
+    """Uploads file to given path"""
+    with open(path, 'wb') as fp:
+        shutil.copyfileobj(file.file, fp)
+
+
+def get_service(
+        service: type(type(BaseService)), db: Session = Depends(get_db)
+) -> Generator[BaseService, None, None]:
+    """
+    Base function for creating service dependency
+    for using with fastapi dependency injection tool.
+    Services give us a class with crud operations etc.
+    with established db connection and settings.
+    """
+    yield service(db)
+
+
+class CreateServiceMixin:
+    """Mixin class for create() operation."""
+    db: Session
+
     def create(self, schema: BaseModel) -> Any:
         """Creates and returns item."""
         item = self.model(**schema.dict())
         self.db.add(item)
         self.db.commit()
         return item
+
+
+class UpdateServiceMixin:
+    """Mixin with update() operation."""
+    db: Session
+    get_or_404: Callable[[int], Any]
 
     def update(self, pk, schema: BaseModel) -> Any:
         """Updates and returns updated item."""
@@ -60,6 +88,12 @@ class BaseService(ABC):
         self.db.refresh(item)
         return item
 
+
+class DeleteServiceMixin:
+    """Mixin with delete() operation."""
+    db: Session
+    get_or_404: Callable[[int], Any]
+
     def delete(self, pk: Any) -> None:
         """Deletes item with given pk."""
         item = self.get_or_404(pk)
@@ -67,18 +101,6 @@ class BaseService(ABC):
         self.db.commit()
 
 
-def upload_static_file(path: str, file: UploadFile) -> None:
-    """Uploads file to given path"""
-    with open(path, "wb") as fp:
-        shutil.copyfileobj(file.file, fp)
-
-
-def get_service(service: type(type(BaseService)), db: Session = Depends(get_db)
-                ) -> Generator[BaseService, None, None]:
-    """
-    Base function for creating service dependency
-    for using with fastapi dependency injection tool.
-    Services give us a class with crud operations etc.
-    with established db connection and settings.
-    """
-    yield service(db)
+class CreateUpdateDeleteService(CreateServiceMixin, UpdateServiceMixin,
+                                DeleteServiceMixin, BaseService):
+    """Service with create, update and delete methods."""

@@ -37,7 +37,7 @@ class UserRead(UserBase):
 
 class UserPartialUpdate(UserBase):
     username: Optional[str] = Field(min_length=6)
-    email: EmailStr | None
+    email: Optional[EmailStr]
     first_name: Optional[str] = Field(min_length=2)
     last_name: Optional[str] = Field(min_length=2)
 

@@ -16,7 +16,7 @@ async def get_pending_requests(
     return service.list_pending_friendships()
 
 
-@router.get('/requests/users/{target_id}', response_model=FriendshipReadWithSender,
+@router.get('/requests/users/{target_id}', response_model=FriendshipRead,
             responses={
                 status.HTTP_404_NOT_FOUND: {
                     'model': DetailMessage

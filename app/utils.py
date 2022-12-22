@@ -1,9 +1,10 @@
 """Miscellaneous utils for project."""
+from typing import Any, MutableMapping
 
 
 class SingletonMeta(type):
     """Metaclass for creating singleton pattern."""
-    _instances = {}
+    _instances: MutableMapping[Any, Any] = {}
 
     def __call__(cls, *args, **kwargs):
         if cls not in cls._instances.keys():

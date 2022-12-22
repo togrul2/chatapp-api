@@ -5,14 +5,14 @@ from sqlalchemy.orm import Session
 import authentication
 from db import get_db
 from models import Friendship, User
-from services.base import BaseService
+from services.base import CreateUpdateDeleteService
 from services.user import UserService
 from schemas.friendship import FriendshipCreate
 from exceptions import (base as base_exceptions,
                         friendship as friendship_exceptions)
 
 
-class FriendshipService(BaseService):
+class FriendshipService(CreateUpdateDeleteService):
     """Friendship service class with db manipulation methods."""
     model = Friendship
 
@@ -30,18 +30,22 @@ class FriendshipService(BaseService):
 
     def list_friends(self):
         """List of all friends user has."""
+        # Friends where auth user send request
         q1 = (self.db.query(User)
               .join(self.model, User.id == self.model.receiver_id)
-              .filter(self.model.sender_id == self.user.id))
+              .filter((self.model.sender_id == self.user.id) &
+                      (self.model.accepted == True)))  # noqa: E712
 
+        # Friends where target users send request
         q2 = (self.db.query(User)
               .join(self.model, User.id == self.model.sender_id)
-              .filter(self.model.receiver_id == self.user.id))
+              .filter((self.model.receiver_id == self.user.id) &
+                      (self.model.accepted == True)))  # noqa: E712
 
         return q1.union(q2).all()
 
-    def _get_friendship_with_user(self, target_id: int):
-        """Returns friendship with user or None if users are not friends."""
+    def _get_friendship_request_query(self, target_id: int):
+        """Returns query matching friendship request."""
         return self.db.query(self.model).filter(
             (
                     (self.model.sender_id == self.user.id) &
@@ -50,14 +54,29 @@ class FriendshipService(BaseService):
                     (self.model.sender_id == target_id) &
                     (self.model.receiver_id == self.user.id)
             )
-        ).first()
+        )
+
+    def _get_friendship_request(self, target_id: int):
+        """Returns matching friendship request."""
+        return self._get_friendship_request_query(target_id).first()
+
+    def _get_friendship(self, target_id: int):
+        """
+        Returns query matching friendship.
+        Besides finding a record, also checks if it is accepted by receiver.
+        """
+        return self._get_friendship_request_query(target_id).first()
+
+    def _get_friendship_with_user(self, target_id: int):
+        """Returns friendship with user or None if users are not friends."""
+        return self._get_friendship_request(target_id)
 
     def get_friendship_with_user_or_404(self, target_id: int):
         """
         Returns friendship with user.
         Raises NotFound if users are not friends.
         """
-        if (friendship := self._get_friendship_with_user(target_id)) is None:
+        if (friendship := self._get_friendship(target_id)) is None:
             raise base_exceptions.NotFound
         return friendship
 
@@ -67,8 +86,10 @@ class FriendshipService(BaseService):
 
         if target_id == self.user.id:
             raise friendship_exceptions.RequestWithYourself
-        if self._get_friendship_with_user(target_id) is not None:
+
+        if self._get_friendship_request(target_id) is not None:
             raise friendship_exceptions.RequestAlreadySent
+
         return super().create(FriendshipCreate(
             receiver_id=target_id, sender_id=self.user.id, accepted=None
         ))

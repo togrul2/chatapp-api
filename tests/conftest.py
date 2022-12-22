@@ -1,7 +1,7 @@
 """
 Config and fixtures for tests.
 """
-from typing import Mapping, Any, Optional, Sequence
+from typing import Mapping, Any, Sequence
 
 import pytest
 from fastapi import FastAPI
@@ -14,24 +14,22 @@ from sqlalchemy.orm import sessionmaker
 from config import settings
 from authentication import create_refresh_token, create_access_token
 from main import app as fastapi_app
-from db import Base, get_db
+from db import Base, get_db, URL_FORMATTER
 from schemas.user import UserCreate
 from services.user import UserService
 from utils import SingletonMeta
 
 test_db_name = 'test_' + settings.postgres_db
-test_db_url = 'postgresql+psycopg2://{}:{}@{}:{}/{}'.format(
+test_db_url = URL_FORMATTER.format(
     settings.postgres_user, settings.postgres_password,
     settings.postgres_host, settings.postgres_port, test_db_name
 )
 
 
 class TestDatabase(metaclass=SingletonMeta):
-    """Singleton with test database"""
+    """Singleton class provides test database engine and sessionmaker."""
 
-    def __init__(self,
-                 db_name: Optional[str] = None,
-                 db_url: Optional[str] = None):
+    def __init__(self, db_name: str = test_db_name, db_url: str = test_db_url):
         self.create_database(db_name)
         self.test_engine = create_engine(db_url)
         self.session_maker = sessionmaker(bind=self.test_engine)
@@ -76,7 +74,7 @@ class TestDatabase(metaclass=SingletonMeta):
 
 
 def _get_test_db():
-    db = TestDatabase(test_db_name, test_db_url).session_maker()
+    db = TestDatabase().session_maker()
     try:
         yield db
     finally:
@@ -100,13 +98,13 @@ def pytest_configure(config):  # noqa
     file after command line options have been parsed.
     """
     fastapi_app.dependency_overrides[get_db] = _get_test_db
-    TestDatabase(test_db_name, test_db_url).create_tables()
+    TestDatabase().create_tables()
 
 
 def pytest_unconfigure(config):  # noqa
     """Called before test process is exited."""
-    TestDatabase(test_db_name, test_db_url).drop_tables()
-    TestDatabase(test_db_name, test_db_url).drop_database()
+    TestDatabase().drop_tables()
+    TestDatabase().drop_database()
 
 
 user_password = 'Testpassword'
@@ -114,7 +112,7 @@ user_password = 'Testpassword'
 
 @pytest.fixture(scope='function')
 def user():
-    with TestDatabase(test_db_name, test_db_url).session_maker() as session:
+    with TestDatabase().session_maker() as session:
         user_service = UserService(session)
         user = user_service.create(UserCreate.construct(
             username='johndoe',
@@ -143,5 +141,5 @@ def client():
 @pytest.fixture()
 def auth_client(auth_tokens):
     yield _client(fastapi_app, headers={
-        'Authorization': f'Bearer %s' % auth_tokens['access_token']
+        'Authorization': 'Bearer %s' % auth_tokens['access_token']
     })

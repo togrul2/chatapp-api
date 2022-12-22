@@ -5,17 +5,20 @@ from typing import Any, Optional
 from fastapi import UploadFile
 
 import authentication
-from config import BASE_DIR
+from config import STATIC_FILES_DIR, STATIC_FILES_URL
 from exceptions import (user as user_exceptions,
                         base as base_exception)
 from models import User
-from services.base import BaseService, get_service
+from services.base import get_service, CreateUpdateDeleteService
 from schemas import user as user_schemas
+
+
+user_profile_picture_path = 'users/{user_id}/pfp'
 
 
 def get_pfp_dir(user_id: int):
     """Returns user's profile pictures directory."""
-    return BASE_DIR / 'app' / 'static' / 'users' / str(user_id) / 'pfp'
+    return STATIC_FILES_DIR / 'users' / str(user_id) / 'pfp'
 
 
 def get_pfp_path(user_id: int, image: UploadFile):
@@ -27,10 +30,13 @@ def get_pfp_path(user_id: int, image: UploadFile):
 
 def get_pfp_url(user_id: int, image: UploadFile):
     """Returns url for file."""
-    return f'/static/users/{user_id}/pfp/{image.filename}'
+    # return STATIC_FILES_URL + f'users/{user_id}/pfp/{image.filename}'
+    return (STATIC_FILES_URL +
+            user_profile_picture_path.format(user_id=user_id) +
+            '/' + image.filename)
 
 
-class UserService(BaseService):
+class UserService(CreateUpdateDeleteService):
     model = User
 
     def _validate_username_uniqueness(self, username: str,
