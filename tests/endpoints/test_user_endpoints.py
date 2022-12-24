@@ -162,7 +162,7 @@ class TestUsersMe:
         assert body['username'] == payload['username']
 
     def test_image_upload(self, user, auth_client, profile_picture):
-        files = {'profile_picture': profile_picture}
+        files = {'profile_picture': (profile_picture.name, profile_picture, "image/jpeg")}
         response = auth_client.post(self.image_url, files=files)
 
         assert response.status_code == status.HTTP_200_OK

@@ -1,0 +1,4 @@
+{
+    "python.poetryPath": "C:\\Users\\user\\AppData\\Roaming\\pypoetry\\venv\\Scripts\\poetry.exe",
+    "python.linting.pylintPath": "venv\\Scripts\\pylint"
+}

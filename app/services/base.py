@@ -41,7 +41,7 @@ class BaseService:
 
 
 def get_service(
-    service: type(type(BaseService)), db: Session = Depends(get_db)
+    service: BaseService, db: Session = Depends(get_db)
 ) -> Generator[BaseService, None, None]:
     """
     Base function for creating service dependency

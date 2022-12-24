@@ -139,7 +139,7 @@ class UserService(CreateUpdateDeleteService):
         # if they are not met, these validation methods will raise exceptions
         self._validate_username_uniqueness(schema.username, pk)
         self._validate_email_uniqueness(schema.email, pk)
-        return super(UserService, self).update(pk, schema)
+        return super().update(pk, schema)
 
 
 # Dependency with user services, should be used with Depends().

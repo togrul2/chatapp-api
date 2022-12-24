@@ -81,5 +81,14 @@ extend-exclude = '''
 ^/app/alembic
 '''
 
+[tool.isort]
+profile = "black"
+line_length = 79
+skip = ["./app/alembic/versions"]
+
 [tool.pylint]
 ignore='versions'
+
+[tool.pytest.ini_options]
+testpaths = './tests'
+python_files = 'test_*.py'

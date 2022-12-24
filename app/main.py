@@ -1,3 +1,4 @@
+"""Main module where fastapi app is being run from."""
 from config import BASE_DIR
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

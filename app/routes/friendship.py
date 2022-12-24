@@ -70,7 +70,7 @@ async def delete_friendship(
     service: FriendshipService = Depends(get_friendship_service),
 ):
     """Deletes friendship with given user if it exists."""
-    service.delete(target_id)
+    service.decline(target_id)
 
 
 @router.get("/friends", response_model=list[UserRead])

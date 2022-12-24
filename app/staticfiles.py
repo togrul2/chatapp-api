@@ -1,3 +1,4 @@
+"""Module with staticfiles manager base and implementation classes."""
 import shutil
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -9,10 +10,16 @@ from fastapi import UploadFile
 
 
 class BaseStaticFilesManager(ABC):
+    """
+    Base class for staticfiles managers.
+    Child classes must implement all its abstract methods.
+    """
+
     static_domain: str
     static_url: str
 
     def get_url(self, path: str):
+        """Returns joined path with staticfiles url."""
         return parse.urljoin(self.static_url, path)
 
     @abstractmethod
@@ -38,8 +45,8 @@ class LocalStaticFilesManager(BaseStaticFilesManager):
         full_path.mkdir(exist_ok=True, parents=True)
         file_path = full_path / file.filename
 
-        with open(file_path, "wb") as fp:
-            shutil.copyfileobj(file.file, fp)
+        with open(file_path, "wb") as temp_file:
+            shutil.copyfileobj(file.file, temp_file)
 
     def collect_staticfiles(self):
         pass

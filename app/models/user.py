@@ -1,6 +1,4 @@
 """Module with user related models."""
-from typing import Sequence
-
 from models.base import Base, CreateTimestampMixin
 from sqlalchemy import (
     Boolean,

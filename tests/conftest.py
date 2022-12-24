@@ -90,7 +90,8 @@ def _get_static_handler():
                                    STATIC_ROOT)
 
 
-class _client:
+class ClientFactory:
+    """Client factory class."""
     def __new__(cls,
                 app: FastAPI,
                 headers: Mapping[str, Any] = None,
@@ -120,7 +121,7 @@ def pytest_unconfigure(config):  # noqa
 user_password = 'Testpassword'
 
 
-@pytest.fixture(scope='function')
+@pytest.fixture()
 def user():
     with TestDatabase().session_maker() as session:
         user_service = UserService(session)
@@ -135,21 +136,16 @@ def user():
         user_service.delete(user.id)
 
 
-@pytest.fixture(scope='function')
-def auth_tokens(user):
-    yield {
-        'access_token': create_access_token(user.id),
-        'refresh_token': create_refresh_token(user.id)
-    }
-
-
 @pytest.fixture()
 def client():
-    yield _client(fastapi_app)
+    """Client for testings endpoints."""
+    yield ClientFactory(fastapi_app)
 
 
 @pytest.fixture()
-def auth_client(auth_tokens):
-    yield _client(fastapi_app, headers={
-        'Authorization': 'Bearer %s' % auth_tokens['access_token']
+def auth_client(user):
+    """Client of authorized user for testings endpoints."""
+    access_token = create_access_token(user.id)
+    yield ClientFactory(fastapi_app, headers={
+        'Authorization': 'Bearer %s' % access_token
     })

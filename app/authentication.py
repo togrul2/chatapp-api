@@ -2,6 +2,7 @@
 Authentication module with all stuff related to authentication via jwt.
 """
 from datetime import datetime, timedelta
+from enum import IntEnum
 from functools import partial
 
 from config import (
@@ -21,7 +22,9 @@ password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/token")
 
 
-class TokenType:
+class TokenType(IntEnum):
+    """Enum class with authentication token types"""
+
     ACCESS = 1
     REFRESH = 2
 
@@ -77,16 +80,21 @@ def _get_user_from_token(token_type: int, token: str) -> int:
         if type_ != token_type:
             raise CredentialsException
 
-        if expire > datetime.utcnow():
-            user_id = payload.get("user_id")
-            return user_id
-        else:
+        if expire <= datetime.utcnow():
             raise ExpiredTokenException
-    except JWTError:
-        raise CredentialsException
+
+        user_id = payload.get("user_id")
+        return user_id
+
+    except JWTError as exc:
+        raise CredentialsException from exc
 
 
 async def get_current_user_id(token: str = Depends(oauth2_scheme)) -> int:
+    """
+    Dependency for getting logged user's id.
+    Returns 401 if unauthenticated.
+    """
     return _get_user_from_token(TokenType.ACCESS, token)
 
 

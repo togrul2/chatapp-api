@@ -34,27 +34,25 @@ class FriendshipService(CreateUpdateDeleteService):
 
     def list_friends(self):
         """List of all friends user has."""
-        # Friends where auth user send request
-        q1 = (
+        sent = (
             self.db.query(User)
             .join(self.model, User.id == self.model.receiver_id)
             .filter(
                 (self.model.sender_id == self.user.id)
-                & (self.model.accepted == True)
+                & (self.model.accepted == True)  # noqa: E712
             )
-        )  # noqa: E712
+        )
 
-        # Friends where target users send request
-        q2 = (
+        received = (
             self.db.query(User)
             .join(self.model, User.id == self.model.sender_id)
             .filter(
                 (self.model.receiver_id == self.user.id)
-                & (self.model.accepted == True)
+                & (self.model.accepted == True)  # noqa: E712
             )
-        )  # noqa: E712
+        )
 
-        return q1.union(q2).all()
+        return sent.union(received).all()
 
     def _get_friendship_request_query(self, target_id: int):
         """Returns query matching friendship request."""
@@ -127,8 +125,8 @@ class FriendshipService(CreateUpdateDeleteService):
         self.db.refresh(friendship)
         return friendship
 
-    def delete(self, target_id: int) -> None:
-        """Deletes friendship with target user."""
+    def decline(self, target_id: int) -> None:
+        """Declines or terminates friendship with target user."""
         friendship = self._get_friendship_with_user(target_id)
 
         if friendship is None:
@@ -139,8 +137,8 @@ class FriendshipService(CreateUpdateDeleteService):
 
 
 def get_friendship_service(
-    db: Session = Depends(get_db),
+    db_session: Session = Depends(get_db),
     user_id: int = Depends(authentication.get_current_user_id),
 ):
     """Dependency for friendship service."""
-    yield FriendshipService(db, user_id)
+    yield FriendshipService(db_session, user_id)

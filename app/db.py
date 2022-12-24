@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 
 URL_FORMATTER = "postgresql+psycopg2://{}:{}@{}:{}/{}"
 
-db_url = URL_FORMATTER.format(
+DB_URL = URL_FORMATTER.format(
     settings.postgres_user,
     settings.postgres_password,
     settings.postgres_host,
@@ -16,7 +16,7 @@ db_url = URL_FORMATTER.format(
     settings.postgres_db,
 )
 
-engine = create_engine(db_url)
+engine = create_engine(DB_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
@@ -24,8 +24,8 @@ Base = declarative_base()
 
 def get_db():
     """Returns db session for FastAPI dependency injection."""
-    db = SessionLocal()
+    db_session = SessionLocal()
     try:
-        yield db
+        yield db_session
     finally:
-        db.close()
+        db_session.close()

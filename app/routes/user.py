@@ -248,7 +248,7 @@ async def delete_auth_user(
     response_model=UserRead,
     responses={status.HTTP_404_NOT_FOUND: {"model": DetailMessage}},
 )
-async def get_user_by_username(
+async def get_user_by_id(
     user_id: int, user_service: UserService = Depends(get_user_service)
 ):
     """
