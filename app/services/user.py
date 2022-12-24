@@ -5,35 +5,24 @@ from typing import Any, Optional
 from fastapi import UploadFile
 
 import authentication
-from config import STATIC_FILES_DIR, STATIC_FILES_URL
 from exceptions import (user as user_exceptions,
                         base as base_exception)
 from models import User
 from services.base import get_service, CreateUpdateDeleteService
 from schemas import user as user_schemas
 
-
-user_profile_picture_path = 'users/{user_id}/pfp'
-
-
-def get_pfp_dir(user_id: int):
-    """Returns user's profile pictures directory."""
-    return STATIC_FILES_DIR / 'users' / str(user_id) / 'pfp'
+user_profile_picture_path = 'users/{user_id}/pfp/{filename}'
 
 
-def get_pfp_path(user_id: int, image: UploadFile):
+def get_pfp_path(user_id: int):
     """Generates path for user profile picture."""
-    base_path = get_pfp_dir(user_id)
-    base_path.mkdir(exist_ok=True, parents=True)
-    return base_path / image.filename
+    return f'users/{user_id}/pfp/'
 
 
 def get_pfp_url(user_id: int, image: UploadFile):
     """Returns url for file."""
-    # return STATIC_FILES_URL + f'users/{user_id}/pfp/{image.filename}'
-    return (STATIC_FILES_URL +
-            user_profile_picture_path.format(user_id=user_id) +
-            '/' + image.filename)
+    return user_profile_picture_path.format(user_id=user_id,
+                                            filename=image.filename)
 
 
 class UserService(CreateUpdateDeleteService):

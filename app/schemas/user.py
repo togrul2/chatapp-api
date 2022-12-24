@@ -2,8 +2,11 @@
 Schemas for validation in controllers via pydantic.
 """
 from typing import Optional
+from urllib import parse
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, validator
+
+from config import STATIC_DOMAIN
 
 
 class UserBase(BaseModel):
@@ -33,6 +36,13 @@ class UserCreate(UserBase):
 class UserRead(UserBase):
     id: int = Field(description="id of a user")
     profile_picture: Optional[str]
+
+    @validator("profile_picture")
+    def format_profile_picture(cls, value: str):  # noqa
+        """Prepends domain to the file path."""
+        if value is not None:
+            return parse.urljoin(STATIC_DOMAIN, value)
+        return value
 
 
 class UserPartialUpdate(UserBase):

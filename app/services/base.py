@@ -1,9 +1,8 @@
 """Base services module."""
-import shutil
 from dataclasses import dataclass
 from typing import ClassVar, Any, Generator, Callable
 
-from fastapi import UploadFile, Depends
+from fastapi import Depends
 from sqlalchemy.orm import Session
 
 from db import get_db
@@ -39,12 +38,6 @@ class BaseService:
         if item is None:
             raise base_exceptions.NotFound
         return item
-
-
-def upload_static_file(path: str, file: UploadFile) -> None:
-    """Uploads file to given path"""
-    with open(path, 'wb') as fp:
-        shutil.copyfileobj(file.file, fp)
 
 
 def get_service(

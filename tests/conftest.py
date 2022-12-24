@@ -11,12 +11,13 @@ from psycopg2.sql import Identifier, SQL
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from config import settings
+from config import settings, BASE_DIR
 from authentication import create_refresh_token, create_access_token
 from main import app as fastapi_app
 from db import Base, get_db, URL_FORMATTER
 from schemas.user import UserCreate
 from services.user import UserService
+from staticfiles import LocalStaticFilesManager, get_staticfiles_manager
 from utils import SingletonMeta
 
 test_db_name = 'test_' + settings.postgres_db
@@ -51,7 +52,7 @@ class TestDatabase(metaclass=SingletonMeta):
 
     def create_database(self, db_name: str):
         self.run_sql_commands(
-            (SQL('CREATE DATABASE {}').format(Identifier(db_name)), )
+            (SQL('CREATE DATABASE {}').format(Identifier(db_name)),)
         )
 
     def create_tables(self) -> None:
@@ -63,13 +64,13 @@ class TestDatabase(metaclass=SingletonMeta):
     def drop_database(self) -> None:
         self.run_sql_commands(
             (SQL('ALTER DATABASE {} allow_connections = off').format(
-                Identifier(test_db_name)), ),
+                Identifier(test_db_name)),),
             (SQL('SELECT pg_terminate_backend(pg_stat_activity.pid) '
                  'FROM pg_stat_activity '
                  'WHERE pg_stat_activity.datname = %s '
                  'AND pid <> pg_backend_pid()'
                  ), ('test_chatapp',)),
-            (SQL('DROP DATABASE {}').format(Identifier(test_db_name)), )
+            (SQL('DROP DATABASE {}').format(Identifier(test_db_name)),)
         )
 
 
@@ -79,6 +80,14 @@ def _get_test_db():
         yield db
     finally:
         db.close()
+
+
+STATIC_ROOT = BASE_DIR / 'app' / 'test_static'
+
+
+def _get_static_handler():
+    return LocalStaticFilesManager('http://localhost:8000', 'static/',
+                                   STATIC_ROOT)
 
 
 class _client:
@@ -98,6 +107,7 @@ def pytest_configure(config):  # noqa
     file after command line options have been parsed.
     """
     fastapi_app.dependency_overrides[get_db] = _get_test_db
+    fastapi_app.dependency_overrides[get_staticfiles_manager] = _get_static_handler
     TestDatabase().create_tables()
 
 

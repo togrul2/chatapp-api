@@ -5,7 +5,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 from pydantic import BaseSettings
 
-
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(os.path.join(BASE_DIR, '.env'))
@@ -15,8 +14,9 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30  # 30 minutes
 REFRESH_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
 ALGORITHM = 'HS256'
 
-STATIC_FILES_URL = '/static/'
-STATIC_FILES_DIR = BASE_DIR / 'app' / 'static'
+STATIC_DOMAIN = 'http://localhost:8000'
+STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'app' / 'static'
 
 
 class Settings(BaseSettings):

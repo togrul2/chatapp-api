@@ -1,5 +1,6 @@
 """Tests for user endpoints."""
 import os
+import shutil
 import tempfile
 from urllib import parse
 
@@ -7,12 +8,10 @@ import pytest
 from fastapi import status
 from PIL import Image
 
-from config import BASE_DIR
 from authentication import create_refresh_token, create_access_token
 from exceptions.user import (CredentialsException, UsernameAlreadyTaken,
                              EmailAlreadyTaken)
-from services.user import get_pfp_dir
-from tests.conftest import user_password
+from tests.conftest import user_password, STATIC_ROOT
 
 
 class TestRegisterUser:
@@ -168,13 +167,12 @@ class TestUsersMe:
 
         assert response.status_code == status.HTTP_200_OK
         body = response.json()
-        path = BASE_DIR / ('app' + body['profile_picture'])
+        filename = body['profile_picture'].split('/')[-1]
+        path = STATIC_ROOT / 'users' / str(user.id) / 'pfp' / filename
         assert os.path.exists(path)
 
         # teardown
-        os.remove(path)
-        dir_path = get_pfp_dir(user.id)
-        os.rmdir(dir_path)
+        shutil.rmtree(STATIC_ROOT)
 
     def test_image_remove(self, user, auth_client):
         response = auth_client.delete(self.image_url)

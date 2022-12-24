@@ -1,15 +1,16 @@
 """User related routes."""
+import uuid
+from urllib import parse
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, status, Form, UploadFile
+from fastapi import APIRouter, Depends, status, Form, UploadFile, HTTPException
 from fastapi.security import OAuth2PasswordRequestForm
 
 import authentication
 from schemas.user import UserCreate, UserRead, UserBase, UserPartialUpdate
 from schemas.base import DetailMessage
-from services.base import upload_static_file
-from services.user import (UserService, get_user_service, get_pfp_path,
-                           get_pfp_url)
+from services.user import (UserService, get_user_service, get_pfp_path)
+from staticfiles import BaseStaticFilesManager, get_staticfiles_manager
 
 router = APIRouter(prefix='/api', tags=["user"])
 
@@ -171,7 +172,9 @@ async def partial_update_auth_user(
 async def upload_profile_picture(
         profile_picture: UploadFile,
         user_id: int = Depends(authentication.get_current_user_id),
-        user_service: UserService = Depends(get_user_service)):
+        user_service: UserService = Depends(get_user_service),
+        staticfiles_manager: BaseStaticFilesManager = Depends(
+            get_staticfiles_manager)):
     """
     Upload image for authenticated user.
     - **image**: image file.
@@ -179,11 +182,27 @@ async def upload_profile_picture(
     :param profile_picture: Profile image user uploads.
     :param user_id: id of an authenticated user.
     :param user_service: service providing user model operations.
+    :param staticfiles_manager: staticfiles manager dependency
     :return: user info.
     """
-    path = get_pfp_path(user_id, profile_picture)
-    url = get_pfp_url(user_id, profile_picture)
-    upload_static_file(path, profile_picture)
+    if profile_picture.content_type not in ('image/jpeg', 'image/png'):
+        raise HTTPException(
+            status_code=400,
+            detail="Wrong file type, only jpeg and png files are allowed"
+        )
+
+    path = get_pfp_path(user_id)
+
+    # Adding uuid4 to filename
+    filename, ext = profile_picture.filename.rsplit('.', 1)
+    filename = f'{filename}_{uuid.uuid4()}'
+    profile_picture.filename = '.'.join([filename, ext])
+
+    # loading file into storage and generating web link
+    staticfiles_manager.load(path, profile_picture)
+    url = staticfiles_manager.get_url(
+        parse.urljoin(path, profile_picture.filename))
+
     return user_service.update_profile_picture(user_id, url)
 
 
@@ -214,18 +233,35 @@ async def delete_auth_user(
     user_service.delete(user_id)
 
 
-# TODO add retrieve user by id
-
-@router.get('/users/{username}', response_model=UserRead,
+@router.get('/users/{user_id:int}', response_model=UserRead,
             responses={
                 status.HTTP_404_NOT_FOUND: {
                     'model': DetailMessage
                 }
             })
-async def get_user(username: str,
-                   user_service: UserService = Depends(get_user_service)):
+async def get_user_by_username(
+        user_id: int, user_service: UserService = Depends(get_user_service)):
     """
-    Returns user with corresponding id or returns 404 error.
+    Returns user with corresponding username or returns 404 error.
+    - **user_id**: id of a user.
+    \f
+    :param user_id: id of a user.
+    :param user_service: service providing user model operations.
+    :return: user with given id.
+    """
+    return user_service.get_or_404(user_id)
+
+
+@router.get('/users/{username:str}', response_model=UserRead,
+            responses={
+                status.HTTP_404_NOT_FOUND: {
+                    'model': DetailMessage
+                }
+            })
+async def get_user_by_username(
+        username: str, user_service: UserService = Depends(get_user_service)):
+    """
+    Returns user with corresponding username or returns 404 error.
     - **user_id**: id of a user.
     \f
     :param username: username of a user.
