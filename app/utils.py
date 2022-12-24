@@ -4,6 +4,7 @@ from typing import Any, MutableMapping
 
 class SingletonMeta(type):
     """Metaclass for creating singleton pattern."""
+
     _instances: MutableMapping[Any, Any] = {}
 
     def __call__(cls, *args, **kwargs):

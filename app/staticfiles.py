@@ -4,9 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib import parse
 
+from config import STATIC_DOMAIN, STATIC_ROOT, STATIC_URL
 from fastapi import UploadFile
-
-from config import STATIC_DOMAIN, STATIC_URL, STATIC_ROOT
 
 
 class BaseStaticFilesManager(ABC):
@@ -28,6 +27,7 @@ class BaseStaticFilesManager(ABC):
 @dataclass
 class LocalStaticFilesManager(BaseStaticFilesManager):
     """Local static files handler. Uses local machines storage."""
+
     static_domain: str
     static_url: str
     static_root: Path | str
@@ -38,7 +38,7 @@ class LocalStaticFilesManager(BaseStaticFilesManager):
         full_path.mkdir(exist_ok=True, parents=True)
         file_path = full_path / file.filename
 
-        with open(file_path, 'wb') as fp:
+        with open(file_path, "wb") as fp:
             shutil.copyfileobj(file.file, fp)
 
     def collect_staticfiles(self):

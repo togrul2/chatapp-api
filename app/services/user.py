@@ -2,48 +2,54 @@
 from functools import partial
 from typing import Any, Optional
 
-from fastapi import UploadFile
-
 import authentication
-from exceptions import (user as user_exceptions,
-                        base as base_exception)
+from exceptions import base as base_exception
+from exceptions import user as user_exceptions
+from fastapi import UploadFile
 from models import User
-from services.base import get_service, CreateUpdateDeleteService
 from schemas import user as user_schemas
+from services.base import CreateUpdateDeleteService, get_service
 
-user_profile_picture_path = 'users/{user_id}/pfp/{filename}'
+user_profile_picture_path = "users/{user_id}/pfp/{filename}"
 
 
 def get_pfp_path(user_id: int):
     """Generates path for user profile picture."""
-    return f'users/{user_id}/pfp/'
+    return f"users/{user_id}/pfp/"
 
 
 def get_pfp_url(user_id: int, image: UploadFile):
     """Returns url for file."""
-    return user_profile_picture_path.format(user_id=user_id,
-                                            filename=image.filename)
+    return user_profile_picture_path.format(
+        user_id=user_id, filename=image.filename
+    )
 
 
 class UserService(CreateUpdateDeleteService):
     model = User
 
-    def _validate_username_uniqueness(self, username: str,
-                                      user_id: Optional[int] = None):
+    def _validate_username_uniqueness(
+        self, username: str, user_id: Optional[int] = None
+    ):
         """Validates uniqueness of a username against given user_id."""
-        if (self.db.query(self.model.id, self.model.username).filter(
-                (self.model.username == username) &
-                (self.model.id != user_id)
-        ).first()) is not None:
+        if (
+            self.db.query(self.model.id, self.model.username)
+            .filter(
+                (self.model.username == username) & (self.model.id != user_id)
+            )
+            .first()
+        ) is not None:
             raise user_exceptions.UsernameAlreadyTaken
 
-    def _validate_email_uniqueness(self, email: str,
-                                   user_id: Optional[int] = None):
+    def _validate_email_uniqueness(
+        self, email: str, user_id: Optional[int] = None
+    ):
         """Validates uniqueness of a email against given user_id."""
-        if (self.db.query(self.model.id, self.model.email).filter(
-                (self.model.email == email) &
-                (self.model.id != user_id)
-        ).first()) is not None:
+        if (
+            self.db.query(self.model.id, self.model.email)
+            .filter((self.model.email == email) & (self.model.id != user_id))
+            .first()
+        ) is not None:
             raise user_exceptions.EmailAlreadyTaken
 
     def _get_by_username(self, username: str):
@@ -69,13 +75,18 @@ class UserService(CreateUpdateDeleteService):
         schema.password = authentication.get_hashed_password(schema.password)
         return super().create(schema)
 
-    def filter_by_username_or_email(self, username: str,
-                                    email: str) -> list[Any]:
+    def filter_by_username_or_email(
+        self, username: str, email: str
+    ) -> list[Any]:
         """List users by matching username or email."""
-        return self.db.query(self.model).filter(
-            (self.model.username.like(username)) |
-            (self.model.email.like(email))
-        ).all()
+        return (
+            self.db.query(self.model)
+            .filter(
+                (self.model.username.like(username))
+                | (self.model.email.like(email))
+            )
+            .all()
+        )
 
     def update_profile_picture(self, user_id: int, image_url: str) -> Any:
         """
@@ -102,8 +113,10 @@ class UserService(CreateUpdateDeleteService):
     def authenticate_user(self, username: str, password: str):
         user = self._get_by_username(username)
         # If user with that username is not found or password is wrong, fail.
-        if not user or authentication.verify_password(password,
-                                                      user.password) is False:
+        if (
+            not user
+            or authentication.verify_password(password, user.password) is False
+        ):
             raise user_exceptions.CredentialsException
         return user
 
@@ -113,12 +126,15 @@ class UserService(CreateUpdateDeleteService):
             raise user_exceptions.CredentialsException
 
         return {
-            'access_token': authentication.create_access_token(user_id),
-            'refresh_token': authentication.create_refresh_token(user_id)
+            "access_token": authentication.create_access_token(user_id),
+            "refresh_token": authentication.create_refresh_token(user_id),
         }
 
-    def update(self, pk, schema: (user_schemas.UserPartialUpdate |
-                                  user_schemas.UserBase)) -> Any:
+    def update(
+        self,
+        pk,
+        schema: (user_schemas.UserPartialUpdate | user_schemas.UserBase),
+    ) -> Any:
         # Validate uniqueness of username and email,
         # if they are not met, these validation methods will raise exceptions
         self._validate_username_uniqueness(schema.username, pk)

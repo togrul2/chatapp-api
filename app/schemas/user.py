@@ -4,13 +4,13 @@ Schemas for validation in controllers via pydantic.
 from typing import Optional
 from urllib import parse
 
-from pydantic import BaseModel, EmailStr, Field, validator
-
 from config import STATIC_DOMAIN
+from pydantic import BaseModel, EmailStr, Field, validator
 
 
 class UserBase(BaseModel):
     """User schema"""
+
     username: str = Field(min_length=6)
     email: EmailStr
     first_name: str = Field(min_length=2)
@@ -20,17 +20,20 @@ class UserBase(BaseModel):
         orm_mode = True
 
 
-password_desc = '''
+password_desc = """
 Password field must match following pattern.
   - Minimum length of 6.
   - Start with capital letter.
   - Must contain ascii letters, digits and - ? ! @ $ symbols.
-'''
+"""
 
 
 class UserCreate(UserBase):
-    password: str = Field(regex="^[A-Z][\w@?!\-$]*$",  # noqa: W605
-                          min_length=6, description=password_desc)
+    password: str = Field(
+        regex="^[A-Z][\w@?!\-$]*$",  # noqa: W605
+        min_length=6,
+        description=password_desc,
+    )
 
 
 class UserRead(UserBase):

@@ -4,18 +4,21 @@ Authentication module with all stuff related to authentication via jwt.
 from datetime import datetime, timedelta
 from functools import partial
 
+from config import (
+    ACCESS_TOKEN_EXPIRE_MINUTES,
+    ALGORITHM,
+    REFRESH_TOKEN_EXPIRE_MINUTES,
+    settings,
+)
+from exceptions.user import CredentialsException, ExpiredTokenException
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
-from jose import jwt, JWTError
+from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-from config import (ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM,
-                    REFRESH_TOKEN_EXPIRE_MINUTES, settings)
-from exceptions.user import CredentialsException, ExpiredTokenException
+password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-password_context = CryptContext(schemes=['bcrypt'], deprecated='auto')
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl='api/token')
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/token")
 
 
 class TokenType:
@@ -39,33 +42,43 @@ def _create_token(type_: int, expires_delta, user_id: int) -> str:
     user_id and expiration time.
     """
     expire = datetime.utcnow() + expires_delta
-    to_encode = {'user_id': user_id,
-                 'expire': expire.isoformat(),
-                 'type': type_}
-    encoded_jwt = jwt.encode(to_encode, settings.secret_key,
-                             algorithm=ALGORITHM)
+    to_encode = {
+        "user_id": user_id,
+        "expire": expire.isoformat(),
+        "type": type_,
+    }
+    encoded_jwt = jwt.encode(
+        to_encode, settings.secret_key, algorithm=ALGORITHM
+    )
     return encoded_jwt
 
 
-create_access_token = partial(_create_token, TokenType.ACCESS,
-                              timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
-create_refresh_token = partial(_create_token, TokenType.REFRESH,
-                               timedelta(minutes=REFRESH_TOKEN_EXPIRE_MINUTES))
+create_access_token = partial(
+    _create_token,
+    TokenType.ACCESS,
+    timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
+)
+create_refresh_token = partial(
+    _create_token,
+    TokenType.REFRESH,
+    timedelta(minutes=REFRESH_TOKEN_EXPIRE_MINUTES),
+)
 
 
 def _get_user_from_token(token_type: int, token: str) -> int:
     """Base function for retrieving user's id from token."""
     try:
-        payload = jwt.decode(token, settings.secret_key,
-                             algorithms=[ALGORITHM])
-        expire = datetime.fromisoformat(payload.get('expire'))
+        payload = jwt.decode(
+            token, settings.secret_key, algorithms=[ALGORITHM]
+        )
+        expire = datetime.fromisoformat(payload.get("expire"))
         type_ = payload.get("type")
 
         if type_ != token_type:
             raise CredentialsException
 
         if expire > datetime.utcnow():
-            user_id = payload.get('user_id')
+            user_id = payload.get("user_id")
             return user_id
         else:
             raise ExpiredTokenException

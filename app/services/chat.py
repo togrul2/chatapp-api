@@ -1,7 +1,7 @@
 from functools import partial
 
 from models import Chat
-from services.base import get_service, CreateUpdateDeleteService
+from services.base import CreateUpdateDeleteService, get_service
 
 
 class ChatService(CreateUpdateDeleteService):

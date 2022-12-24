@@ -1,2 +1,2 @@
-from .user import *
 from .chat import *
+from .user import *

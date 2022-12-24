@@ -1,13 +1,15 @@
 """Base model class and utils."""
-from sqlalchemy import Integer, Column, DateTime, func
+from typing import Sequence
 
 import db
+from sqlalchemy import Column, DateTime, Integer, func
 
 
 class Base(db.Base):
     """Base class for models"""
+
     __abstract__ = True
-    __repr_fields__ = ('id',)
+    __repr_fields__: Sequence[str] = ("id",)
 
     id = Column(Integer, primary_key=True)
 
@@ -15,9 +17,13 @@ class Base(db.Base):
         return self.__repr__()
 
     def __repr__(self):
-        attrs = ', '.join(tuple(f'{field}: {getattr(self, field)}'
-                                for field in self.__repr_fields__))
-        return f'{__class__.__name__}({attrs})'
+        attrs = ", ".join(
+            tuple(
+                f"{field}: {getattr(self, field)}"
+                for field in self.__repr_fields__
+            )
+        )
+        return f"{__class__.__name__}({attrs})"
 
 
 class CreateTimestampMixin:
@@ -26,6 +32,7 @@ class CreateTimestampMixin:
 
     Must come before the `Base` class in mro().
     """
+
     created_at = Column(DateTime, server_default=func.now())
 
 
@@ -35,4 +42,5 @@ class CreateUpdateTimestampMixin(CreateTimestampMixin):
 
     Must come before the `Base` class in mro().
     """
+
     modified_at = Column(DateTime, onupdate=func.now())

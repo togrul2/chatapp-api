@@ -1,13 +1,12 @@
 """Base services module."""
 from dataclasses import dataclass
-from typing import ClassVar, Any, Generator, Callable
-
-from fastapi import Depends
-from sqlalchemy.orm import Session
+from typing import Any, Callable, ClassVar, Generator
 
 from db import get_db
 from exceptions import base as base_exceptions
+from fastapi import Depends
 from schemas.base import BaseModel
+from sqlalchemy.orm import Session
 
 
 @dataclass
@@ -21,6 +20,7 @@ class BaseService:
         model = SampleModel
 
     """
+
     model: ClassVar[Any]
     db: Session
 
@@ -41,7 +41,7 @@ class BaseService:
 
 
 def get_service(
-        service: type(type(BaseService)), db: Session = Depends(get_db)
+    service: type(type(BaseService)), db: Session = Depends(get_db)
 ) -> Generator[BaseService, None, None]:
     """
     Base function for creating service dependency
@@ -54,6 +54,7 @@ def get_service(
 
 class CreateServiceMixin:
     """Mixin class for create() operation."""
+
     db: Session
 
     def create(self, schema: BaseModel) -> Any:
@@ -66,6 +67,7 @@ class CreateServiceMixin:
 
 class UpdateServiceMixin:
     """Mixin with update() operation."""
+
     db: Session
     get_or_404: Callable[[int], Any]
 
@@ -84,6 +86,7 @@ class UpdateServiceMixin:
 
 class DeleteServiceMixin:
     """Mixin with delete() operation."""
+
     db: Session
     get_or_404: Callable[[int], Any]
 
@@ -94,6 +97,7 @@ class DeleteServiceMixin:
         self.db.commit()
 
 
-class CreateUpdateDeleteService(CreateServiceMixin, UpdateServiceMixin,
-                                DeleteServiceMixin, BaseService):
+class CreateUpdateDeleteService(
+    CreateServiceMixin, UpdateServiceMixin, DeleteServiceMixin, BaseService
+):
     """Service with create, update and delete methods."""

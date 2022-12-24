@@ -1,10 +1,10 @@
 from fastapi import APIRouter
 from fastapi.websockets import WebSocket
 
-router = APIRouter(prefix='chat')
+router = APIRouter(prefix="chat")
 
 
-@router.websocket('/ws')
+@router.websocket("/ws")
 async def private_messages(websocket: WebSocket):
     await websocket.accept()
     while True:
