@@ -137,8 +137,12 @@ class UserService(CreateUpdateDeleteService):
     ) -> Any:
         # Validate uniqueness of username and email,
         # if they are not met, these validation methods will raise exceptions
-        self._validate_username_uniqueness(schema.username, pk)
-        self._validate_email_uniqueness(schema.email, pk)
+        if schema.username:
+            self._validate_username_uniqueness(schema.username, pk)
+
+        if schema.email:
+            self._validate_email_uniqueness(schema.email, pk)
+
         return super().update(pk, schema)
 
 

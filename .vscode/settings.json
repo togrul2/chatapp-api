@@ -1,4 +1,26 @@
 {
-    "python.poetryPath": "C:\\Users\\user\\AppData\\Roaming\\pypoetry\\venv\\Scripts\\poetry.exe",
-    "python.linting.pylintPath": "venv\\Scripts\\pylint"
+    "[python]": {
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": true
+        },
+        "editor.formatOnSave": true,
+    },
+
+    "python.poetryPath": "C:/Users/user/AppData/Roaming/pypoetry/venv/Scripts/poetry.exe",
+    "python.linting.pylintPath": ".venv/Scripts/pylint",
+
+    "python.analysis.extraPaths": [
+        "./app"
+    ],
+    "python.analysis.typeCheckingMode": "basic",
+
+    "python.testing.pytestArgs": [
+        "tests"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true,
+
+    "python.formatting.provider": "black",
+    "python.formatting.blackPath": ".venv/Scripts//black",
+    "python.linting.enabled": true
 }

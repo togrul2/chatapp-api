@@ -24,7 +24,8 @@ class FriendshipRead(FriendshipBase):
 
 
 class FriendshipReadWithSender(FriendshipBase):
-    """Friendship schema for reading friendships with sender field"""
+    """Friendship schema for reading friendships with extended sender field"""
+
     id: int
     accepted: Optional[bool]
     created_at: datetime
@@ -33,4 +34,6 @@ class FriendshipReadWithSender(FriendshipBase):
 
 class FriendshipCreate(FriendshipBase):
     """Frienship schema for creation"""
+
     sender_id: int
+    accepted: Optional[bool] = None

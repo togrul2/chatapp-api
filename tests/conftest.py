@@ -1,104 +1,76 @@
 """
 Config and fixtures for tests.
 """
-from typing import Mapping, Any, Sequence
+from typing import Any, Mapping
 
 import pytest
+from authentication import create_access_token
+from config import BASE_DIR, settings
+from db import URL_FORMATTER, get_db
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from psycopg2 import connect, extensions
-from psycopg2.sql import Identifier, SQL
+from main import app as fastapi_app
+from models.user import User
+from schemas.user import UserCreate
+from services.friendship import FriendshipService
+from services.user import UserService
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-
-from config import settings, BASE_DIR
-from authentication import create_refresh_token, create_access_token
-from main import app as fastapi_app
-from db import Base, get_db, URL_FORMATTER
-from schemas.user import UserCreate
-from services.user import UserService
 from staticfiles import LocalStaticFilesManager, get_staticfiles_manager
 from utils import SingletonMeta
 
-test_db_name = 'test_' + settings.postgres_db
+from tests.sql import PostgreSQLSession, create_tables, drop_tables
+
+test_db_name = "test_" + settings.postgres_db
 test_db_url = URL_FORMATTER.format(
-    settings.postgres_user, settings.postgres_password,
-    settings.postgres_host, settings.postgres_port, test_db_name
+    user=settings.postgres_user,
+    password=settings.postgres_password,
+    host=settings.postgres_host,
+    port=settings.postgres_port,
+    db=test_db_name,
+)
+
+
+db_session = PostgreSQLSession(
+    settings.postgres_user,
+    settings.postgres_password,
+    settings.postgres_host,
+    settings.postgres_port,
 )
 
 
 class TestDatabase(metaclass=SingletonMeta):
     """Singleton class provides test database engine and sessionmaker."""
 
-    def __init__(self, db_name: str = test_db_name, db_url: str = test_db_url):
-        self.create_database(db_name)
+    def __init__(self, db_url: str):
         self.test_engine = create_engine(db_url)
         self.session_maker = sessionmaker(bind=self.test_engine)
 
-    @staticmethod
-    def run_sql_commands(*commands: Sequence[Any]):
-        conn = connect(
-            user=settings.postgres_user,
-            host=settings.postgres_host,
-            port=settings.postgres_port,
-            password=settings.postgres_password)
-        conn.autocommit = True
-        conn.set_isolation_level(extensions.ISOLATION_LEVEL_AUTOCOMMIT)
-        cursor = conn.cursor()
-        for command in commands:
-            cursor.execute(*command)
-        cursor.close()
-        conn.close()
-
-    def create_database(self, db_name: str):
-        self.run_sql_commands(
-            (SQL('CREATE DATABASE {}').format(Identifier(db_name)),)
-        )
-
-    def create_tables(self) -> None:
-        Base.metadata.create_all(self.test_engine)
-
-    def drop_tables(self) -> None:
-        Base.metadata.drop_all(self.test_engine)
-
-    def drop_database(self) -> None:
-        self.run_sql_commands(
-            (SQL('ALTER DATABASE {} allow_connections = off').format(
-                Identifier(test_db_name)),),
-            (SQL('SELECT pg_terminate_backend(pg_stat_activity.pid) '
-                 'FROM pg_stat_activity '
-                 'WHERE pg_stat_activity.datname = %s '
-                 'AND pid <> pg_backend_pid()'
-                 ), ('test_chatapp',)),
-            (SQL('DROP DATABASE {}').format(Identifier(test_db_name)),)
-        )
-
 
 def _get_test_db():
-    db = TestDatabase().session_maker()
+    db = TestDatabase(test_db_url).session_maker()
     try:
         yield db
     finally:
         db.close()
 
 
-STATIC_ROOT = BASE_DIR / 'app' / 'test_static'
+STATIC_ROOT = BASE_DIR / "app" / "test_static"
 
 
 def _get_static_handler():
-    return LocalStaticFilesManager('http://localhost:8000', 'static/',
-                                   STATIC_ROOT)
+    return LocalStaticFilesManager(
+        "http://localhost:8000", "static/", STATIC_ROOT
+    )
 
 
 class ClientFactory:
     """Client factory class."""
-    def __new__(cls,
-                app: FastAPI,
-                headers: Mapping[str, Any] = None,
-                **kwargs):
-        __client = TestClient(app, **kwargs)
-        __client.headers = headers
-        return __client
+
+    def __new__(cls, app: FastAPI, headers: Mapping[str, Any], **kwargs):
+        _client = TestClient(app, **kwargs)
+        _client.headers = headers  # type: ignore
+        return _client
 
 
 def pytest_configure(config):  # noqa
@@ -107,31 +79,41 @@ def pytest_configure(config):  # noqa
     This hook is called for every plugin and initial conftest
     file after command line options have been parsed.
     """
+    db_session.create_database(test_db_name)
+
+    create_tables(TestDatabase(test_db_url).test_engine)
+    # create_database(test_db_name)
+
     fastapi_app.dependency_overrides[get_db] = _get_test_db
-    fastapi_app.dependency_overrides[get_staticfiles_manager] = _get_static_handler
-    TestDatabase().create_tables()
+    fastapi_app.dependency_overrides[
+        get_staticfiles_manager
+    ] = _get_static_handler
 
 
 def pytest_unconfigure(config):  # noqa
     """Called before test process is exited."""
-    TestDatabase().drop_tables()
-    TestDatabase().drop_database()
+    drop_tables(TestDatabase(test_db_url).test_engine)
+
+    db_session.drop_database(test_db_name)
+    # drop_database(test_db_name)
 
 
-user_password = 'Testpassword'
+user_password = "Testpassword"
 
 
 @pytest.fixture()
 def user():
-    with TestDatabase().session_maker() as session:
+    with TestDatabase(test_db_url).session_maker() as session:
         user_service = UserService(session)
-        user = user_service.create(UserCreate.construct(
-            username='johndoe',
-            email='johndoe@example.com',
-            first_name='John',
-            last_name='Doe',
-            password=user_password
-        ))
+        user = user_service.create(
+            UserCreate.construct(
+                username="johndoe",
+                email="johndoe@example.com",
+                first_name="John",
+                last_name="Doe",
+                password=user_password,
+            )
+        )
         yield user
         user_service.delete(user.id)
 
@@ -139,13 +121,43 @@ def user():
 @pytest.fixture()
 def client():
     """Client for testings endpoints."""
-    yield ClientFactory(fastapi_app)
+    yield ClientFactory(fastapi_app, {})
 
 
 @pytest.fixture()
-def auth_client(user):
+def auth_client(user: User):
     """Client of authorized user for testings endpoints."""
-    access_token = create_access_token(user.id)
-    yield ClientFactory(fastapi_app, headers={
-        'Authorization': 'Bearer %s' % access_token
-    })
+    access_token = create_access_token(user.id)  # type: ignore
+    yield ClientFactory(
+        fastapi_app, headers={"Authorization": "Bearer %s" % access_token}
+    )
+
+
+@pytest.fixture()
+def sender_user():
+    """User for sending friendship request to another one."""
+    with TestDatabase(test_db_url).session_maker() as session:
+        user_password = "Testpassword"
+
+        user_services = UserService(session)
+        user = user_services.create(
+            UserCreate.construct(
+                username="peterdoe",
+                email="peterdoe@example.com",
+                first_name="Peter",
+                last_name="Doe",
+                password=user_password,
+            )
+        )
+        yield user
+        user_services.delete(user.id)
+
+
+@pytest.fixture()
+def friendship_request(user: User, sender_user: User):
+    """Friendship model factory."""
+    with TestDatabase(test_db_url).session_maker() as session:
+        service = FriendshipService(session, sender_user.id)  # type: ignore
+        friendship = service.send_to(user.id)  # type: ignore
+        yield friendship
+        service.delete(friendship.id)

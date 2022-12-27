@@ -7,6 +7,6 @@ RequestAlreadySent = HTTPException(
 )
 
 RequestWithYourself = HTTPException(
-    status_code=status.HTTP_403_FORBIDDEN,
+    status_code=status.HTTP_409_CONFLICT,
     detail="You can't send request to yourself.",
 )

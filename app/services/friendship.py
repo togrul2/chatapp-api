@@ -8,7 +8,7 @@ from models import Friendship, User
 from schemas.friendship import FriendshipCreate
 from services.base import CreateUpdateDeleteService
 from services.user import UserService
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer, joinedload
 
 
 class FriendshipService(CreateUpdateDeleteService):
@@ -23,14 +23,17 @@ class FriendshipService(CreateUpdateDeleteService):
 
     def list_pending_friendships(self):
         """List of users pending requests"""
-        return (
+        query = (
             self.db.query(self.model)
+            .options(
+                joinedload(self.model.sender), defer(self.model.sender_id)
+            )
             .filter(
                 (self.model.receiver_id == self.user.id)
                 & (self.model.accepted == None)  # noqa: E711
             )
-            .all()
         )
+        return query.all()
 
     def list_friends(self):
         """List of all friends user has."""
@@ -54,9 +57,9 @@ class FriendshipService(CreateUpdateDeleteService):
 
         return sent.union(received).all()
 
-    def _get_friendship_request_query(self, target_id: int):
-        """Returns query matching friendship request."""
-        return self.db.query(self.model).filter(
+    def _get_friendship_request(self, target_id: int):
+        """Returns matching friendship request."""
+        query = self.db.query(self.model).filter(
             (
                 (self.model.sender_id == self.user.id)
                 & (self.model.receiver_id == target_id)
@@ -66,28 +69,14 @@ class FriendshipService(CreateUpdateDeleteService):
                 & (self.model.receiver_id == self.user.id)
             )
         )
-
-    def _get_friendship_request(self, target_id: int):
-        """Returns matching friendship request."""
-        return self._get_friendship_request_query(target_id).first()
-
-    def _get_friendship(self, target_id: int):
-        """
-        Returns query matching friendship.
-        Besides finding a record, also checks if it is accepted by receiver.
-        """
-        return self._get_friendship_request_query(target_id).first()
-
-    def _get_friendship_with_user(self, target_id: int):
-        """Returns friendship with user or None if users are not friends."""
-        return self._get_friendship_request(target_id)
+        return query.first()
 
     def get_friendship_with_user_or_404(self, target_id: int):
         """
         Returns friendship with user.
         Raises NotFound if users are not friends.
         """
-        if (friendship := self._get_friendship(target_id)) is None:
+        if (friendship := self._get_friendship_request(target_id)) is None:
             raise base_exceptions.NotFound
         return friendship
 
@@ -101,10 +90,8 @@ class FriendshipService(CreateUpdateDeleteService):
         if self._get_friendship_request(target_id) is not None:
             raise friendship_exceptions.RequestAlreadySent
 
-        return super().create(
-            FriendshipCreate(
-                receiver_id=target_id, sender_id=self.user.id, accepted=None
-            )
+        return self.create(
+            FriendshipCreate(receiver_id=target_id, sender_id=self.user.id)
         )
 
     def approve(self, target_id: int) -> Friendship:
@@ -127,7 +114,7 @@ class FriendshipService(CreateUpdateDeleteService):
 
     def decline(self, target_id: int) -> None:
         """Declines or terminates friendship with target user."""
-        friendship = self._get_friendship_with_user(target_id)
+        friendship = self._get_friendship_request(target_id)
 
         if friendship is None:
             raise base_exceptions.NotFound

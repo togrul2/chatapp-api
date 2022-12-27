@@ -26,6 +26,8 @@ class Friendship(CreateTimestampMixin, Base):
     receiver_id = Column(Integer, ForeignKey("user.id"))
     accepted = Column(Boolean)
 
+    sender = relationship("User", foreign_keys="Friendship.sender_id")
+
 
 class User(Base):
     __tablename__ = "user"

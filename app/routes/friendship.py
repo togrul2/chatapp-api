@@ -5,7 +5,11 @@ from schemas.friendship import FriendshipRead, FriendshipReadWithSender
 from schemas.user import UserRead
 from services.friendship import FriendshipService, get_friendship_service
 
-router = APIRouter(prefix="/api/friendship", tags=["friendship"])
+router = APIRouter(
+    prefix="/api/friendship",
+    tags=["friendship"],
+    responses={status.HTTP_401_UNAUTHORIZED: {"model": DetailMessage}},
+)
 
 
 @router.get("/requests", response_model=list[FriendshipReadWithSender])
@@ -32,10 +36,8 @@ async def get_request(
 @router.post(
     "/requests/users/{target_id}",
     response_model=FriendshipRead,
-    responses={
-        status.HTTP_409_CONFLICT: {"model": DetailMessage},
-        status.HTTP_403_FORBIDDEN: {"model": DetailMessage},
-    },
+    responses={status.HTTP_409_CONFLICT: {"model": DetailMessage}},
+    status_code=status.HTTP_201_CREATED,
 )
 async def send_request(
     target_id: int,

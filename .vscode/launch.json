@@ -5,11 +5,20 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name":"Python: FastAPI",
+            "type":"python",
+            "request":"launch",
+            "module":"uvicorn",
+            "args":["main:app"],
+            "jinja":true,
+            "justMyCode":true
+        },
+        {
             "name": "Pytest failed tests only",
             "type": "python",
             "request": "launch",
             "module": "pytest --lf",
             "justMyCode": true
-        }
+        },
     ]
 }

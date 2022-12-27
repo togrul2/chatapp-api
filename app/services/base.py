@@ -41,7 +41,8 @@ class BaseService:
 
 
 def get_service(
-    service: BaseService, db: Session = Depends(get_db)
+    service: Callable[[Session], BaseService],
+    db: Session = Depends(get_db),
 ) -> Generator[BaseService, None, None]:
     """
     Base function for creating service dependency
@@ -52,10 +53,8 @@ def get_service(
     yield service(db)
 
 
-class CreateServiceMixin:
+class CreateServiceMixin(BaseService):
     """Mixin class for create() operation."""
-
-    db: Session
 
     def create(self, schema: BaseModel) -> Any:
         """Creates and returns item."""
@@ -65,11 +64,8 @@ class CreateServiceMixin:
         return item
 
 
-class UpdateServiceMixin:
+class UpdateServiceMixin(BaseService):
     """Mixin with update() operation."""
-
-    db: Session
-    get_or_404: Callable[[int], Any]
 
     def update(self, pk, schema: BaseModel) -> Any:
         """Updates and returns updated item."""
