@@ -3,7 +3,6 @@
 
 ### Python ###
 # Custom exclusions
-.idea/
 app/static/*
 
 # Byte-compiled / optimized / DLL files
