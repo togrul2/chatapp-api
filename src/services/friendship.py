@@ -1,12 +1,9 @@
 """Friendship services module."""
-from fastapi import Depends
-from sqlalchemy.orm import Session, defer, joinedload
+from sqlalchemy.orm import defer, joinedload
 
-import authentication
-from db import get_db
 from exceptions import base as base_exceptions
 from exceptions import friendship as friendship_exceptions
-from models import Friendship, User
+from models.user import Friendship, User
 from schemas.friendship import FriendshipCreate
 from services.base import CreateUpdateDeleteService
 from services.user import UserService
@@ -17,8 +14,7 @@ class FriendshipService(CreateUpdateDeleteService):
 
     model = Friendship
 
-    def __init__(self, session: Session, user_id: int):
-        super().__init__(session)
+    def set_user(self, user_id: int):
         self.user_service = UserService(self.session)
         self.user = self.user_service.get_or_401(user_id)
 
@@ -122,11 +118,3 @@ class FriendshipService(CreateUpdateDeleteService):
 
         self.session.delete(friendship)
         self.session.commit()
-
-
-def get_friendship_service(
-    db_session: Session = Depends(get_db),
-    user_id: int = Depends(authentication.get_current_user_id),
-):
-    """Dependency for friendship service."""
-    yield FriendshipService(db_session, user_id)

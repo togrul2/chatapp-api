@@ -1,5 +1,4 @@
 """User services module."""
-from functools import partial
 from typing import Any, Optional
 
 from fastapi import UploadFile
@@ -7,9 +6,9 @@ from fastapi import UploadFile
 import authentication
 from exceptions import base as base_exception
 from exceptions import user as user_exceptions
-from models import User
+from models.user import User
 from schemas import user as user_schemas
-from services.base import CreateUpdateDeleteService, get_service
+from services.base import CreateUpdateDeleteService
 
 user_profile_picture_path = "users/{user_id}/pfp/{filename}"
 
@@ -147,7 +146,3 @@ class UserService(CreateUpdateDeleteService):
             self._validate_email_uniqueness(schema.email, pk)
 
         return super().update(pk, schema)
-
-
-# Dependency with user services, should be used with Depends().
-get_user_service = partial(get_service, UserService)

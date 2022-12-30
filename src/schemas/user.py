@@ -21,7 +21,7 @@ class UserBase(BaseModel):
         orm_mode = True
 
 
-password_desc = """
+password_description = """
 Password field must match following pattern.
   - Minimum length of 6.
   - Start with capital letter.
@@ -33,7 +33,7 @@ class UserCreate(UserBase):
     password: str = Field(
         regex="^[A-Z][\w@?!\-$]*$",  # noqa: W605
         min_length=6,
-        description=password_desc,
+        description=password_description,
     )
 
 

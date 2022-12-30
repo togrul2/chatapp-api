@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 from enum import IntEnum
 from functools import partial
 
-from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -69,40 +68,30 @@ create_refresh_token = partial(
 )
 
 
-def _get_user_from_token(token_type: int, token: str) -> int:
+def get_user_from_token(token_type: int, token: str) -> int:
     """Base function for retrieving user's id from token."""
     try:
-        payload = jwt.decode(
+        payload: dict[str, str] = jwt.decode(
             token, settings.secret_key, algorithms=[ALGORITHM]
         )
-        curr_date = str(payload.get("expire"))
+        curr_date = payload.get("expire")
         type_ = payload.get("type")
+        user_id = payload.get("user_id")
 
-        if not curr_date:
+        if (
+            not curr_date
+            or datetime.fromisoformat(curr_date) <= datetime.utcnow()
+        ):
             # FIXME: think of better handling
             raise ExpiredTokenException
 
-        expire = datetime.fromisoformat(curr_date)
-
-        if type_ != token_type:
+        if type_ != token_type or not user_id:
             raise CredentialsException
 
-        if expire <= datetime.utcnow():
-            raise ExpiredTokenException
-
-        user_id = payload.get("user_id")
-        return user_id
+        return int(user_id)
 
     except JWTError as exc:
         raise CredentialsException from exc
 
 
-async def get_current_user_id(token: str = Depends(oauth2_scheme)) -> int:
-    """
-    Dependency for getting logged user's id.
-    Returns 401 if unauthenticated.
-    """
-    return _get_user_from_token(TokenType.ACCESS, token)
-
-
-verify_refresh_token = partial(_get_user_from_token, TokenType.REFRESH)
+verify_refresh_token = partial(get_user_from_token, TokenType.REFRESH)

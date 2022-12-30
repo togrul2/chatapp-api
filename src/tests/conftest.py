@@ -2,7 +2,7 @@
 Config and fixtures for tests.
 """
 import shutil
-from typing import Any, Mapping
+from typing import Any, Mapping, cast
 
 import pytest
 from fastapi import FastAPI
@@ -12,25 +12,26 @@ from sqlalchemy.orm import sessionmaker
 
 from authentication import create_access_token
 from config import SRC_DIR, settings
-from db import URL_FORMATTER, get_db
+from dependencies import get_db, get_staticfiles_manager
 from main import app as fastapi_app
 from models.user import User
 from schemas.user import UserCreate
 from services.friendship import FriendshipService
 from services.user import UserService
-from staticfiles import LocalStaticFilesManager, get_staticfiles_manager
+from staticfiles import LocalStaticFilesManager
 from tests.sql import PostgreSQLSession, create_tables, drop_tables
 from utils import SingletonMeta
 
 test_db_name = "test_" + settings.postgres_db
-test_db_url = URL_FORMATTER.format(
-    user=settings.postgres_user,
-    password=settings.postgres_password,
-    host=settings.postgres_host,
-    port=settings.postgres_port,
-    db=test_db_name,
+test_db_url = (
+    "postgresql+psycopg2://{user}:{password}@{host}:{port}/{db}".format(
+        user=settings.postgres_user,
+        password=settings.postgres_password,
+        host=settings.postgres_host,
+        port=settings.postgres_port,
+        db=test_db_name,
+    )
 )
-
 
 db_session = PostgreSQLSession(
     settings.postgres_user,
@@ -59,7 +60,7 @@ def _get_test_db():
 TEST_STATIC_ROOT = SRC_DIR / "test_static"
 
 
-def _get_static_handler():
+def _get_test_staticfiles_manager():
     return LocalStaticFilesManager(
         "http://localhost:8000", "static/", TEST_STATIC_ROOT
     )
@@ -86,7 +87,7 @@ def pytest_configure(config):  # noqa
     fastapi_app.dependency_overrides[get_db] = _get_test_db
     fastapi_app.dependency_overrides[
         get_staticfiles_manager
-    ] = _get_static_handler
+    ] = _get_test_staticfiles_manager
 
 
 def pytest_unconfigure(config):  # noqa
@@ -155,7 +156,8 @@ def sender_user():
 def friendship_request(user: User, sender_user: User):
     """Friendship model factory."""
     with TestDatabase(test_db_url).session_maker() as session:
-        service = FriendshipService(session, sender_user.id)  # type: ignore
-        friendship = service.send_to(user.id)  # type: ignore
+        service = FriendshipService(session)
+        service.set_user(cast(int, sender_user.id))
+        friendship = service.send_to(cast(int, user.id))
         yield friendship
         service.delete(friendship.id)

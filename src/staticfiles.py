@@ -7,8 +7,6 @@ from urllib import parse
 
 from fastapi import UploadFile
 
-from config import STATIC_DOMAIN, STATIC_ROOT, STATIC_URL
-
 
 class BaseStaticFilesManager(ABC):
     """
@@ -51,8 +49,3 @@ class LocalStaticFilesManager(BaseStaticFilesManager):
 
     def collect_staticfiles(self):
         pass
-
-
-def get_staticfiles_manager():
-    """Dependency for staticfiles"""
-    yield LocalStaticFilesManager(STATIC_DOMAIN, STATIC_URL, STATIC_ROOT)

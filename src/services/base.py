@@ -1,11 +1,9 @@
 """Base services module."""
 from dataclasses import dataclass
-from typing import Any, Callable, ClassVar, Generator
+from typing import Any, ClassVar
 
-from fastapi import Depends
 from sqlalchemy.orm import Session
 
-from db import get_db
 from exceptions import base as base_exceptions
 from schemas.base import BaseModel
 
@@ -39,19 +37,6 @@ class BaseService:
         if item is None:
             raise base_exceptions.NotFound
         return item
-
-
-def get_service(
-    service: Callable[[Session], BaseService],
-    db: Session = Depends(get_db),
-) -> Generator[BaseService, None, None]:
-    """
-    Base function for creating service dependency
-    for using with fastapi dependency injection tool.
-    Services give us a class with crud operations etc.
-    with established db connection and settings.
-    """
-    yield service(db)
 
 
 class CreateServiceMixin(BaseService):

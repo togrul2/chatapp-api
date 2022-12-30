@@ -7,7 +7,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./app:/app
+      - ./src:/app
     command: ['./db_wait.sh ./start.sh']
     environment:
       - DB_URL:${DB_URL}
