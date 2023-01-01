@@ -1,11 +1,20 @@
 .git
 .gitignore
 
+# IDE directories
+.vscode
+.idea
 
+# caches
 __pycache__
 */__pycache__/
 */*/__pycache__/
 */*/*/__pycache__/
-venv/
+.mypy_cache
+.pytest_cache
+htmlcov
+.coverage
+.venv/
 
 .docker
+.env

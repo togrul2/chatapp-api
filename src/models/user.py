@@ -14,7 +14,7 @@ from models.base import Base, CreateTimestampMixin
 __all__ = ["Friendship", "User"]
 
 
-class Friendship(CreateTimestampMixin, Base):
+class Friendship(CreateTimestampMixin):
     """Friendship model for storing relations between users."""
 
     __tablename__ = "friendship"

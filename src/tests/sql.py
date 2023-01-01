@@ -3,9 +3,9 @@ Module with sql utils for running sql code.
 This is required to create test database, tables etc.
 """
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Sequence
 
 from psycopg2 import connect, extensions
 from psycopg2.sql import SQL, Composed, Identifier
@@ -44,6 +44,8 @@ class PostgreSQLSession(DBSQLSession):
 
     @contextmanager
     def session(self):
+        """Context manager for opening database session."""
+
         conn = connect(
             user=self.username,
             host=self.host,
@@ -57,6 +59,8 @@ class PostgreSQLSession(DBSQLSession):
 
     @contextmanager
     def cursor(self):
+        """Context manager for opening database session cursor."""
+
         with self.session() as session:
             cursor = session.cursor()
             yield cursor
@@ -73,13 +77,16 @@ class PostgreSQLSession(DBSQLSession):
                 cursor.execute(*cmd)  # type: ignore
 
     def create_database(self, db_name: str) -> None:
+        """Creates the given database."""
+
         self.run_commands(
             (SQL("CREATE DATABASE {}").format(Identifier(db_name)),)
         )
         print("Test database created")
 
     def drop_database(self, db_name: str) -> None:
-        # FIXME: Doesn't drop always for some reason
+        """Drops the given database."""
+
         self.run_commands(
             (
                 SQL("ALTER DATABASE {} allow_connections = off").format(
@@ -101,8 +108,10 @@ class PostgreSQLSession(DBSQLSession):
 
 
 def create_tables(test_engine) -> None:
+    """Creates all the tables in the binded to the engine database."""
     Base.metadata.create_all(test_engine)  # type: ignore
 
 
 def drop_tables(test_engine) -> None:
+    """Drops all the tables in the binded to the engine database."""
     Base.metadata.drop_all(test_engine)  # type: ignore

@@ -3,7 +3,7 @@
 
 ### Python ###
 # Custom exclusions
-app/static/*
+static/**/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -128,6 +128,7 @@ celerybeat.pid
 
 # Environments
 .env
+.env.docker
 .venv
 env/
 venv/

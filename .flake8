@@ -3,7 +3,6 @@
 exclude =
     .git,
     __pycache__,
-    venv,
+    .venv,
     alembic
     __init__.py
-

@@ -2,7 +2,8 @@
 Config and fixtures for tests.
 """
 import shutil
-from typing import Any, Mapping, cast
+from collections.abc import Mapping
+from typing import Any
 
 import pytest
 from fastapi import FastAPI
@@ -10,30 +11,25 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+import authentication
 from authentication import create_access_token
-from config import SRC_DIR, settings
+from config import BASE_DIR, settings
 from dependencies import get_db, get_staticfiles_manager
 from main import app as fastapi_app
-from models.user import User
-from schemas.user import UserCreate
-from services.friendship import FriendshipService
-from services.user import UserService
+from models.user import Friendship, User
 from staticfiles import LocalStaticFilesManager
 from tests.sql import PostgreSQLSession, create_tables, drop_tables
 from utils import SingletonMeta
 
 test_db_name = "test_" + settings.postgres_db
 test_db_url = (
-    "postgresql+psycopg2://{user}:{password}@{host}:{port}/{db}".format(
-        user=settings.postgres_user,
-        password=settings.postgres_password,
-        host=settings.postgres_host,
-        port=settings.postgres_port,
-        db=test_db_name,
-    )
+    f"postgresql+psycopg2://"
+    f"{settings.postgres_user}:{settings.postgres_password}"
+    f"@{settings.postgres_host}:{settings.postgres_port}"
+    f"/{settings.postgres_db}"
 )
 
-db_session = PostgreSQLSession(
+dbms_session = PostgreSQLSession(
     settings.postgres_user,
     settings.postgres_password,
     settings.postgres_host,
@@ -50,14 +46,14 @@ class TestDatabase(metaclass=SingletonMeta):
 
 
 def _get_test_db():
-    db = TestDatabase(test_db_url).session_maker()
+    db_session = TestDatabase(test_db_url).session_maker()
     try:
-        yield db
+        yield db_session
     finally:
-        db.close()
+        db_session.close()
 
 
-TEST_STATIC_ROOT = SRC_DIR / "test_static"
+TEST_STATIC_ROOT = BASE_DIR / "test_static"
 
 
 def _get_test_staticfiles_manager():
@@ -81,7 +77,7 @@ def pytest_configure(config):  # noqa
     This hook is called for every plugin and initial conftest
     file after command line options have been parsed.
     """
-    db_session.create_database(test_db_name)
+    dbms_session.create_database(test_db_name)
     create_tables(TestDatabase(test_db_url).test_engine)
 
     fastapi_app.dependency_overrides[get_db] = _get_test_db
@@ -93,28 +89,29 @@ def pytest_configure(config):  # noqa
 def pytest_unconfigure(config):  # noqa
     """Called before test process is exited."""
     drop_tables(TestDatabase(test_db_url).test_engine)
-    db_session.drop_database(test_db_name)
+    dbms_session.drop_database(test_db_name)
     shutil.rmtree(TEST_STATIC_ROOT)
-
-
-user_password = "Testpassword"
 
 
 @pytest.fixture()
 def user():
+    """Fixture for generating user"""
     with TestDatabase(test_db_url).session_maker() as session:
-        user_service = UserService(session)
-        user = user_service.create(
-            UserCreate.construct(
-                username="johndoe",
-                email="johndoe@example.com",
-                first_name="John",
-                last_name="Doe",
-                password=user_password,
-            )
+        password = authentication.get_hashed_password("Testpassword")
+        user_model = User(
+            username="johndoe",
+            email="johndoe@example.com",
+            first_name="John",
+            last_name="Doe",
+            password=password,
         )
-        yield user
-        user_service.delete(user.id)
+        session.add(user_model)
+        session.commit()
+        target_id = user_model.id
+        yield user_model
+
+        session.query(User).filter(User.id == target_id).delete()
+        session.commit()
 
 
 @pytest.fixture()
@@ -126,9 +123,9 @@ def client():
 @pytest.fixture()
 def auth_client(user: User):
     """Client of authorized user for testings endpoints."""
-    access_token = create_access_token(user.id)  # type: ignore
+    access_token = create_access_token(user.id)
     yield ClientFactory(
-        fastapi_app, headers={"Authorization": "Bearer %s" % access_token}
+        fastapi_app, headers={"Authorization": f"Bearer {access_token}"}
     )
 
 
@@ -136,28 +133,34 @@ def auth_client(user: User):
 def sender_user():
     """User for sending friendship request to another one."""
     with TestDatabase(test_db_url).session_maker() as session:
-        user_password = "Testpassword"
-
-        user_services = UserService(session)
-        user = user_services.create(
-            UserCreate.construct(
-                username="peterdoe",
-                email="peterdoe@example.com",
-                first_name="Peter",
-                last_name="Doe",
-                password=user_password,
-            )
+        password = authentication.get_hashed_password("Testpassword")
+        user_model = User(
+            username="peterdoe",
+            email="peterdoe@example.com",
+            first_name="Peter",
+            last_name="Doe",
+            password=password,
         )
-        yield user
-        user_services.delete(user.id)
+        session.add(user_model)
+        session.commit()
+        target_id = user_model.id
+        yield user_model
+
+        session.query(User).filter(User.id == target_id).delete()
+        session.commit()
 
 
 @pytest.fixture()
 def friendship_request(user: User, sender_user: User):
     """Friendship model factory."""
     with TestDatabase(test_db_url).session_maker() as session:
-        service = FriendshipService(session)
-        service.set_user(cast(int, sender_user.id))
-        friendship = service.send_to(cast(int, user.id))
-        yield friendship
-        service.delete(friendship.id)
+        friendship_model = Friendship(
+            receiver_id=user.id, sender_id=sender_user.id
+        )
+        session.add(friendship_model)
+        session.commit()
+        target_id = friendship_model.id
+        yield friendship_model
+
+        session.query(Friendship).filter(Friendship.id == target_id).delete()
+        session.commit()

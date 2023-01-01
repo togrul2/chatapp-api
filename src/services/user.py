@@ -1,5 +1,5 @@
 """User services module."""
-from typing import Any, Optional
+from typing import Any
 
 from fastapi import UploadFile
 
@@ -10,8 +10,6 @@ from models.user import User
 from schemas import user as user_schemas
 from services.base import CreateUpdateDeleteService
 
-user_profile_picture_path = "users/{user_id}/pfp/{filename}"
-
 
 def get_pfp_path(user_id: int):
     """Generates path for user profile picture."""
@@ -20,16 +18,16 @@ def get_pfp_path(user_id: int):
 
 def get_pfp_url(user_id: int, image: UploadFile):
     """Returns url for file."""
-    return user_profile_picture_path.format(
-        user_id=user_id, filename=image.filename
-    )
+    return f"users/{user_id}/pfp/{image.filename}"
 
 
 class UserService(CreateUpdateDeleteService):
+    """Service class for User model"""
+
     model = User
 
     def _validate_username_uniqueness(
-        self, username: str, user_id: Optional[int] = None
+        self, username: str, user_id: int | None = None
     ):
         """Validates uniqueness of a username against given user_id."""
         if (
@@ -42,7 +40,7 @@ class UserService(CreateUpdateDeleteService):
             raise user_exceptions.UsernameAlreadyTaken
 
     def _validate_email_uniqueness(
-        self, email: str, user_id: Optional[int] = None
+        self, email: str, user_id: int | None = None
     ):
         """Validates uniqueness of a email against given user_id."""
         if (
@@ -59,12 +57,14 @@ class UserService(CreateUpdateDeleteService):
         )
 
     def get_or_401(self, user_id: int):
+        """Returns user with given id or raises 401"""
         user = self._get_by_pk(user_id)
         if user is None:
             raise user_exceptions.CredentialsException
         return user
 
     def get_by_username_or_404(self, username: str):
+        """Returns user by his username. Raises 404 if not found"""
         user = self._get_by_username(username)
         if user is None:
             raise base_exception.NotFound

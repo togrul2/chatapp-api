@@ -24,4 +24,3 @@ ENV FASTAPI_ENV=${FASTAPI_ENV} \
     POETRY_HOME='/usr/local'
 
 SHELL ["/bin/bash", "-eo", "pipefail", "-c"]
-

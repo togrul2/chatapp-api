@@ -24,7 +24,7 @@ app = FastAPI(
 
 app.mount(
     "/static",
-    StaticFiles(directory=BASE_DIR / "src" / "static"),
+    StaticFiles(directory=BASE_DIR / "static"),
     name="static",
 )
 

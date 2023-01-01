@@ -1,7 +1,6 @@
 """
 Schemas for validation in controllers via pydantic.
 """
-from typing import Optional
 from urllib import parse
 
 from pydantic import BaseModel, EmailStr, Field, validator
@@ -31,7 +30,7 @@ Password field must match following pattern.
 
 class UserCreate(UserBase):
     password: str = Field(
-        regex="^[A-Z][\w@?!\-$]*$",  # noqa: W605
+        regex=r"^[A-Z][\w@?!\-$]*$",  # noqa: W605
         min_length=6,
         description=password_description,
     )
@@ -39,7 +38,7 @@ class UserCreate(UserBase):
 
 class UserRead(UserBase):
     id: int = Field(description="id of a user")
-    profile_picture: Optional[str]
+    profile_picture: str | None
 
     @validator("profile_picture")
     def format_profile_picture(cls, value: str):  # noqa
@@ -50,10 +49,10 @@ class UserRead(UserBase):
 
 
 class UserPartialUpdate(UserBase):
-    username: Optional[str] = Field(min_length=6)
-    email: Optional[EmailStr]
-    first_name: Optional[str] = Field(min_length=2)
-    last_name: Optional[str] = Field(min_length=2)
+    username: str | None = Field(min_length=6)
+    email: EmailStr | None
+    first_name: str | None = Field(min_length=2)
+    last_name: str | None = Field(min_length=2)
 
 
 class TokenData(BaseModel):

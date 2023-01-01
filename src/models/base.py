@@ -1,5 +1,5 @@
 """Base model class and utils."""
-from typing import Sequence
+from collections.abc import Sequence
 
 from sqlalchemy import Column, DateTime, Integer, func
 
@@ -24,15 +24,17 @@ class Base(db.Base):
                 for field in self.__repr_fields__
             )
         )
-        return f"{__class__.__name__}({attrs})"
+        return f"{self.__class__.__name__}({attrs})"
 
 
-class CreateTimestampMixin:
+class CreateTimestampMixin(Base):
     """
     Mixin for adding created at field to the model.
 
     Must come before the `Base` class in mro().
     """
+
+    __abstract__ = True
 
     created_at = Column(DateTime, server_default=func.now())
 
@@ -44,4 +46,5 @@ class CreateUpdateTimestampMixin(CreateTimestampMixin):
     Must come before the `Base` class in mro().
     """
 
+    __abstract__ = True
     modified_at = Column(DateTime, onupdate=func.now())

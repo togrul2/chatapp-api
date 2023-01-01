@@ -1,6 +1,6 @@
 """Module with FastAPI dependencies."""
+from collections.abc import Callable, Generator
 from functools import partial
-from typing import Callable, Generator
 
 from fastapi import Depends
 from sqlalchemy.orm import Session

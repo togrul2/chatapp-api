@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel
 
@@ -20,7 +19,7 @@ class FriendshipRead(FriendshipBase):
 
     id: int
     sender_id: int
-    accepted: Optional[bool]
+    accepted: bool | None
     created_at: datetime
 
 
@@ -28,7 +27,7 @@ class FriendshipReadWithSender(FriendshipBase):
     """Friendship schema for reading friendships with extended sender field"""
 
     id: int
-    accepted: Optional[bool]
+    accepted: bool | None
     created_at: datetime
     sender: UserRead
 
@@ -37,4 +36,4 @@ class FriendshipCreate(FriendshipBase):
     """Frienship schema for creation"""
 
     sender_id: int
-    accepted: Optional[bool] = None
+    accepted: bool | None = None

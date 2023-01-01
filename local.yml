@@ -9,8 +9,10 @@ services:
     volumes:
       - ./src:/app
     command: ['./db_wait.sh ./start.sh']
+    env_file:
+      - .env.docker
     environment:
-      - DB_URL:${DB_URL}
+      - DATABASE_URL:${DB_URL}
 
     depends_on:
       - db

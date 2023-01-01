@@ -1,6 +1,5 @@
 """User related routes."""
 import uuid
-from typing import List, Optional
 from urllib import parse
 
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, status
@@ -66,9 +65,9 @@ async def refresh(
     return user_service.refresh_tokens(refresh_token)
 
 
-@router.get("/users", response_model=List[UserRead])
+@router.get("/users", response_model=list[UserRead])
 async def get_users(
-    keyword: Optional[str] = None,
+    keyword: str | None = None,
     user_service: UserService = Depends(get_user_service),
 ):
     """

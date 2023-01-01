@@ -15,12 +15,7 @@ from exceptions.user import (
     UsernameAlreadyTaken,
 )
 from models.user import User
-from tests.conftest import (
-    TEST_STATIC_ROOT,
-    TestDatabase,
-    test_db_url,
-    user_password,
-)
+from tests.conftest import TEST_STATIC_ROOT, TestDatabase, test_db_url
 
 
 class TestRegisterUser:
@@ -32,7 +27,7 @@ class TestRegisterUser:
         "email": "peterdoe@example.com",
         "first_name": "Peter",
         "last_name": "Doe",
-        "password": user_password,
+        "password": "Testpassword",
     }
 
     def test_register_success(self, client):
@@ -90,7 +85,7 @@ class TestToken:
 
     def test_token_success(self, client, user: User):
         """Test successful token creation endpoint"""
-        user_data = {"username": user.username, "password": user_password}
+        user_data = {"username": user.username, "password": "Testpassword"}
         response = client.post(self.token_url, data=user_data)
 
         assert response.status_code == status.HTTP_201_CREATED
@@ -102,7 +97,7 @@ class TestToken:
         """Test token create with invalid credentials attempt."""
         user_data = {
             "username": user.username,
-            "password": user_password + "wrong",
+            "password": "Testpassword" + "wrong",
         }
         response = client.post(self.token_url, data=user_data)
 
@@ -173,8 +168,8 @@ class TestUsersMe:
         body = response.json()
 
         assert response.status_code == status.HTTP_200_OK
-        for field in payload:
-            assert body[field] == payload[field]
+        for field, value in payload.items():
+            assert body[field] == value
 
     def test_partial_modify_user(self, auth_client):
         """Tests logged in user's partial update method."""
@@ -188,7 +183,7 @@ class TestUsersMe:
         assert body["username"] == payload["username"]
 
     def test_image_upload(self, user, auth_client, profile_picture):
-        """Tests logged in user's image upload method."""
+        """Tests logged-in user's image upload method."""
         files = {
             "profile_picture": (
                 profile_picture.name,
@@ -205,22 +200,30 @@ class TestUsersMe:
         assert os.path.exists(path)
 
     def test_image_remove(self, auth_client):
-        """Tests logged in user's image remove method."""
+        """Tests logged-in user's image remove method."""
         response = auth_client.delete(self.image_url)
 
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
-    def test_delete_user(self, auth_client):
+    def test_delete_user(self, user, auth_client):
+        """Tests logged-in user deletion."""
+        target_id = user.id
         response = auth_client.delete(self.url)
 
         assert response.status_code == status.HTTP_204_NO_CONTENT
+        with TestDatabase(test_db_url).session_maker() as session:
+            assert (
+                session.query(User).filter(User.id == target_id).first()
+            ) is None
 
 
 class TestListUsers:
+    """Test user listing api."""
+
     url = "/api/users"
 
     def test_list_users(self, client, user: User):
-        """"""
+        """Test listing all users."""
         response = client.get(self.url)
         body = response.json()
 
@@ -241,7 +244,7 @@ class TestListUsers:
 
 
 class TestRetrieveUser:
-    """Tests user detail endpoints"""
+    """Tests user detail endpoints."""
 
     url = "api/users/"
 
