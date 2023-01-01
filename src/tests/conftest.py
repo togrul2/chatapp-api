@@ -26,7 +26,7 @@ test_db_url = (
     f"postgresql+psycopg2://"
     f"{settings.postgres_user}:{settings.postgres_password}"
     f"@{settings.postgres_host}:{settings.postgres_port}"
-    f"/{settings.postgres_db}"
+    f"/{test_db_name}"
 )
 
 dbms_session = PostgreSQLSession(

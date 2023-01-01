@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from config import BASE_DIR
+from config import BASE_DIR, STATIC_URL
 from routes.friendship import router as friendship_router
 from routes.user import router as user_router
 
@@ -23,7 +23,7 @@ app = FastAPI(
 )
 
 app.mount(
-    "/static",
+    STATIC_URL,
     StaticFiles(directory=BASE_DIR / "static"),
     name="static",
 )

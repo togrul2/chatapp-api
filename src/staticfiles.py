@@ -25,10 +25,6 @@ class BaseStaticFilesManager(ABC):
     def load(self, path: str, file: UploadFile) -> None:
         """Load file to the target path"""
 
-    @abstractmethod
-    def collect_staticfiles(self) -> None:
-        """Collects static files into storage"""
-
 
 @dataclass
 class LocalStaticFilesManager(BaseStaticFilesManager):
@@ -46,6 +42,3 @@ class LocalStaticFilesManager(BaseStaticFilesManager):
 
         with open(file_path, "wb") as temp_file:
             shutil.copyfileobj(file.file, temp_file)
-
-    def collect_staticfiles(self):
-        pass

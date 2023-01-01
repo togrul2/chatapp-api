@@ -17,8 +17,8 @@ ALGORITHM = "HS256"
 
 # staticfiles
 STATIC_DOMAIN = "http://localhost:8000"
-STATIC_URL = "static/"
-STATIC_ROOT = SRC_DIR / "static"
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "static"
 
 
 class Settings(BaseSettings):
