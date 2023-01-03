@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from config import BASE_DIR, STATIC_URL
+from routes.chat import router as chat_router
 from routes.friendship import router as friendship_router
 from routes.user import router as user_router
 
@@ -38,3 +39,4 @@ app.add_middleware(
 
 app.include_router(user_router)
 app.include_router(friendship_router)
+app.include_router(chat_router)

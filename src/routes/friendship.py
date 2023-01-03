@@ -1,7 +1,10 @@
 """Friendship related routes."""
 from fastapi import APIRouter, Depends, status
 
-from dependencies import get_current_user_id, get_friendship_service
+from dependencies import (
+    get_current_user_id_from_bearer,
+    get_friendship_service,
+)
 from schemas.base import DetailMessage
 from schemas.friendship import FriendshipRead, FriendshipReadWithSender
 from schemas.user import UserRead
@@ -17,7 +20,7 @@ router = APIRouter(
 @router.get("/requests", response_model=list[FriendshipReadWithSender])
 async def get_pending_requests(
     service: FriendshipService = Depends(get_friendship_service),
-    user_id: int = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id_from_bearer),
 ):
     """Returns list of user's friendship requests pending for response."""
     service.set_user(user_id)
@@ -32,7 +35,7 @@ async def get_pending_requests(
 async def get_request(
     target_id: int,
     service: FriendshipService = Depends(get_friendship_service),
-    user_id: int = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id_from_bearer),
 ):
     """Returns friendship with given user."""
     service.set_user(user_id)
@@ -48,7 +51,7 @@ async def get_request(
 async def send_request(
     target_id: int,
     service: FriendshipService = Depends(get_friendship_service),
-    user_id: int = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id_from_bearer),
 ):
     """
     Sends friendship request to the target user.
@@ -66,7 +69,7 @@ async def send_request(
 async def accept_request(
     target_id: int,
     service: FriendshipService = Depends(get_friendship_service),
-    user_id: int = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id_from_bearer),
 ):
     """
     Accepts frienship request from target.
@@ -84,7 +87,7 @@ async def accept_request(
 async def delete_friendship(
     target_id: int,
     service: FriendshipService = Depends(get_friendship_service),
-    user_id: int = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id_from_bearer),
 ):
     """Deletes friendship with given user if it exists."""
     service.set_user(user_id)
@@ -94,7 +97,7 @@ async def delete_friendship(
 @router.get("/friends", response_model=list[UserRead])
 async def get_friends(
     service: FriendshipService = Depends(get_friendship_service),
-    user_id: int = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id_from_bearer),
 ):
     """Returns list of friends."""
     service.set_user(user_id)

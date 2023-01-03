@@ -7,7 +7,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 
 import authentication
 from dependencies import (
-    get_current_user_id,
+    get_current_user_id_from_bearer,
     get_staticfiles_manager,
     get_user_service,
 )
@@ -114,7 +114,7 @@ async def create_user(
 
 @router.get("/users/me", response_model=UserRead)
 async def get_auth_user(
-    user_id: int = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id_from_bearer),
     user_service: UserService = Depends(get_user_service),
 ):
     """
@@ -134,7 +134,7 @@ async def get_auth_user(
 )
 async def update_auth_user(
     data: UserBase,
-    user_id: int = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id_from_bearer),
     user_service: UserService = Depends(get_user_service),
 ):
     """
@@ -160,7 +160,7 @@ async def update_auth_user(
 )
 async def partial_update_auth_user(
     data: UserPartialUpdate,
-    user_id: int = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id_from_bearer),
     user_service: UserService = Depends(get_user_service),
 ):
     """
@@ -181,7 +181,7 @@ async def partial_update_auth_user(
 @router.post("/users/me/image", response_model=UserRead)
 async def upload_profile_picture(
     profile_picture: UploadFile,
-    user_id: int = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id_from_bearer),
     user_service: UserService = Depends(get_user_service),
     staticfiles_manager: BaseStaticFilesManager = Depends(
         get_staticfiles_manager
@@ -221,7 +221,7 @@ async def upload_profile_picture(
 
 @router.delete("/users/me/image", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_profile_picture(
-    user_id: int = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id_from_bearer),
     user_service: UserService = Depends(get_user_service),
 ):
     """
@@ -235,7 +235,7 @@ async def remove_profile_picture(
 
 @router.delete("/users/me", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_auth_user(
-    user_id: int = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_user_id_from_bearer),
     user_service: UserService = Depends(get_user_service),
 ):
     """

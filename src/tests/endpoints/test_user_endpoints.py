@@ -10,8 +10,8 @@ from PIL import Image
 
 from authentication import create_access_token, create_refresh_token
 from exceptions.user import (
-    CredentialsException,
     EmailAlreadyTaken,
+    HTTPBadTokenException,
     UsernameAlreadyTaken,
 )
 from models.user import User
@@ -102,7 +102,7 @@ class TestToken:
         response = client.post(self.token_url, data=user_data)
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
-        assert response.json()["detail"] == CredentialsException.detail
+        assert response.json()["detail"] == HTTPBadTokenException.detail
 
     def test_refresh_success(self, client, user):
         """Test refresh endpoint successful attempt."""
@@ -124,7 +124,7 @@ class TestToken:
         )
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
-        assert response.json()["detail"] == CredentialsException.detail
+        assert response.json()["detail"] == HTTPBadTokenException.detail
 
 
 class TestUsersMe:

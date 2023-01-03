@@ -60,7 +60,7 @@ class UserService(CreateUpdateDeleteService):
         """Returns user with given id or raises 401"""
         user = self._get_by_pk(user_id)
         if user is None:
-            raise user_exceptions.CredentialsException
+            raise user_exceptions.HTTPBadTokenException
         return user
 
     def get_by_username_or_404(self, username: str):
@@ -119,13 +119,13 @@ class UserService(CreateUpdateDeleteService):
             not user
             or authentication.verify_password(password, user.password) is False
         ):
-            raise user_exceptions.CredentialsException
+            raise user_exceptions.HTTPBadTokenException
         return user
 
     def refresh_tokens(self, refresh_token: str):
         user_id = authentication.verify_refresh_token(refresh_token)
         if self._get_by_pk(user_id) is None:
-            raise user_exceptions.CredentialsException
+            raise user_exceptions.HTTPBadTokenException
 
         return {
             "access_token": authentication.create_access_token(user_id),

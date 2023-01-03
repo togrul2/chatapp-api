@@ -12,14 +12,8 @@ EmailAlreadyTaken = HTTPException(
 )
 
 
-CredentialsException = HTTPException(
+HTTPBadTokenException = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,
-    detail="Could not validate credentials",
-    headers={"WWW-Authenticate": "Bearer"},
-)
-
-ExpiredTokenException = HTTPException(
-    status_code=status.HTTP_401_UNAUTHORIZED,
-    detail="Access token expired",
+    detail="Token is either expired or invalid.",
     headers={"WWW-Authenticate": "Bearer"},
 )

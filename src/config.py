@@ -33,5 +33,9 @@ class Settings(BaseSettings):
     postgres_user: str
     postgres_password: str
 
+    redis_host: str
+    redis_port: str = 6379
+    redis_db: str
+
 
 settings = Settings()  # type: ignore

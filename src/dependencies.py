@@ -2,12 +2,14 @@
 from collections.abc import Callable, Generator
 from functools import partial
 
-from fastapi import Depends
+from fastapi import Cookie, Depends, WebSocket
 from sqlalchemy.orm import Session
 
 from authentication import TokenType, get_user_from_token, oauth2_scheme
 from config import STATIC_DOMAIN, STATIC_ROOT, STATIC_URL
 from db import SessionLocal
+from exceptions.chat import WebSocketBadTokenException
+from exceptions.user import HTTPBadTokenException
 from services.base import BaseService
 from services.chat import ChatService
 from services.friendship import FriendshipService
@@ -29,12 +31,26 @@ def get_staticfiles_manager() -> BaseStaticFilesManager:
     return LocalStaticFilesManager(STATIC_DOMAIN, STATIC_URL, STATIC_ROOT)
 
 
-async def get_current_user_id(token: str = Depends(oauth2_scheme)) -> int:
+def get_current_user_id_from_bearer(
+    access_token: str = Depends(oauth2_scheme),
+) -> int:
     """
-    Dependency for getting logged user's id.
+    Dependency for getting logged user's id from `authorization` header.
     Returns 401 if unauthenticated.
     """
-    return get_user_from_token(TokenType.ACCESS, token)
+    return get_user_from_token(
+        TokenType.ACCESS, HTTPBadTokenException, access_token
+    )
+
+
+def get_current_user_id_from_cookie(access_token: str = Cookie()) -> int:
+    """
+    Dependency for getting logged user's id from `access_token` cookie.
+    Returns 401 if unauthenticated.
+    """
+    return get_user_from_token(
+        TokenType.ACCESS, WebSocketBadTokenException, access_token
+    )
 
 
 def get_service(
@@ -48,6 +64,18 @@ def get_service(
     with established db connection and settings.
     """
     yield service(db_session)
+
+
+def get_auth_websocket(
+    websocket: WebSocket,
+    user_id: int = Depends(get_current_user_id_from_cookie),
+) -> WebSocket:
+    """
+    Dependency returns websocket with the id of the logged in user.
+    Access token is taken from the `access_token` cookie.
+    If no token is provided(unauthorized) handshake response returns 403"""
+    websocket.user_id = user_id
+    return websocket
 
 
 # Dependencies for services, should be used with Depends().

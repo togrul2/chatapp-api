@@ -15,7 +15,7 @@ from config import (
     REFRESH_TOKEN_EXPIRE_MINUTES,
     settings,
 )
-from exceptions.user import CredentialsException, ExpiredTokenException
+from exceptions.user import HTTPBadTokenException
 
 password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -39,7 +39,7 @@ def verify_password(password: str, hashed_pass: str) -> bool:
     return password_context.verify(password, hashed_pass)
 
 
-def _create_token(type_: int, expires_delta, user_id: int) -> str:
+def _create_token(type_: int, expires_delta: timedelta, user_id: int) -> str:
     """
     Base function for creating tokens with given type,
     user_id and expiration time.
@@ -68,8 +68,11 @@ create_refresh_token = partial(
 )
 
 
-def get_user_from_token(token_type: int, token: str) -> int:
-    """Base function for retrieving user's id from token."""
+def get_user_from_token(
+    token_type: int, exception: BaseException, token: str
+) -> int:
+    """Base function for retrieving user's id from token.
+    Raises given exception if token is incorrect or expired."""
     try:
         payload: dict[str, str] = jwt.decode(
             token, settings.secret_key, algorithms=[ALGORITHM]
@@ -81,17 +84,18 @@ def get_user_from_token(token_type: int, token: str) -> int:
         if (
             not curr_date
             or datetime.fromisoformat(curr_date) <= datetime.utcnow()
+            or type_ != token_type
+            or not user_id
         ):
             # FIXME: think of better handling
-            raise ExpiredTokenException
-
-        if type_ != token_type or not user_id:
-            raise CredentialsException
+            raise exception
 
         return int(user_id)
 
     except JWTError as exc:
-        raise CredentialsException from exc
+        raise exception from exc
 
 
-verify_refresh_token = partial(get_user_from_token, TokenType.REFRESH)
+verify_refresh_token = partial(
+    get_user_from_token, TokenType.REFRESH, HTTPBadTokenException
+)

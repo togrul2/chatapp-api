@@ -7,6 +7,10 @@ This app is a real time chat api where people can chat with their friends.
     First you might need to set PYTHONPATH to src
     $ uvicorn main:app --reload --host localhost --port 8000
 
+### Alembic
+    Create migration
+    $ alembic revision --autogenerate -n init
+
 ## Functionality
 
 1. Friendship system, people can befriend with each other.
