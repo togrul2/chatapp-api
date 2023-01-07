@@ -43,3 +43,5 @@ class Message(CreateTimestampMixin, Base):
     body = Column(Text, nullable=False)
     sender_id = Column(Integer, ForeignKey("user.id"))
     chat_id = Column(Integer, ForeignKey("chat.id"))
+
+    sender = relationship("User", backref="messages")

@@ -18,7 +18,7 @@ from dependencies import get_db, get_staticfiles_manager
 from main import app as fastapi_app
 from models.user import Friendship, User
 from staticfiles import LocalStaticFilesManager
-from tests.sql import PostgreSQLSession, create_tables, drop_tables
+from tests.sql import PostgreSQLSession, create_tables, drop_tables, DBSQLSession
 from utils import SingletonMeta
 
 test_db_name = "test_" + settings.postgres_db
@@ -29,7 +29,7 @@ test_db_url = (
     f"/{test_db_name}"
 )
 
-dbms_session = PostgreSQLSession(
+dbms_session: DBSQLSession = PostgreSQLSession(
     settings.postgres_user,
     settings.postgres_password,
     settings.postgres_host,
@@ -58,7 +58,7 @@ TEST_STATIC_ROOT = BASE_DIR / "test_static"
 
 def _get_test_staticfiles_manager():
     return LocalStaticFilesManager(
-        "http://localhost:8000", "static/", TEST_STATIC_ROOT
+        "http://localhost:8000", "/static/", TEST_STATIC_ROOT
     )
 
 

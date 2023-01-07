@@ -20,6 +20,9 @@ STATIC_DOMAIN = "http://localhost:8000"
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "static"
 
+# Pagination
+PAGE_SIZE_DEFAULT = 10
+
 
 class Settings(BaseSettings):
     """Settings for env variables."""

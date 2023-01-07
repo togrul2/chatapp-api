@@ -37,6 +37,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.on_event("startup")
+def ping_sql_database():
+    ...
+
+
+@app.on_event("startup")
+def ping_redis_db():
+    ...
+
+
 app.include_router(user_router)
 app.include_router(friendship_router)
 app.include_router(chat_router)

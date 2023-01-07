@@ -18,19 +18,27 @@ class DBSQLSession(ABC):
 
     @abstractmethod
     @contextmanager
-    def session(self):
+    def get_session(self):
         """Context manager for providing session with DBMS."""
         yield
 
     @abstractmethod
     @contextmanager
-    def cursor(self):
+    def get_cursor(self):
         """Context manager for providing cursor with connection."""
         yield
 
     @abstractmethod
     def run_commands(self, *commands) -> None:
         """Runs SQL commands in connection."""
+
+    @abstractmethod
+    def create_database(self, db_name: str) -> None:
+        """Creates database with given name."""
+
+    @abstractmethod
+    def drop_database(self, db_name: str) -> None:
+        """Creates database with given name."""
 
 
 @dataclass
@@ -43,7 +51,7 @@ class PostgreSQLSession(DBSQLSession):
     port: str
 
     @contextmanager
-    def session(self):
+    def get_session(self):
         """Context manager for opening database session."""
 
         conn = connect(
@@ -58,10 +66,9 @@ class PostgreSQLSession(DBSQLSession):
         conn.close()
 
     @contextmanager
-    def cursor(self):
+    def get_cursor(self):
         """Context manager for opening database session cursor."""
-
-        with self.session() as session:
+        with self.get_session() as session:
             cursor = session.cursor()
             yield cursor
             cursor.close()
@@ -72,7 +79,7 @@ class PostgreSQLSession(DBSQLSession):
         """Runs given command in database.
         Raises error if not connection is established"""
 
-        with self.cursor() as cursor:
+        with self.get_cursor() as cursor:
             for cmd in commands:
                 cursor.execute(*cmd)  # type: ignore
 
@@ -100,7 +107,7 @@ class PostgreSQLSession(DBSQLSession):
                     "WHERE pg_stat_activity.datname = %s "
                     "AND pid <> pg_backend_pid()"
                 ),
-                ("test_chatapp",),
+                (db_name,),
             ),
             (SQL("DROP DATABASE {}").format(Identifier(db_name)),),
         )

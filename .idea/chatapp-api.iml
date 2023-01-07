@@ -13,7 +13,7 @@
       <excludeFolder url="file://$MODULE_DIR$/htmlcov" />
       <excludeFolder url="file://$MODULE_DIR$/static" />
     </content>
-    <orderEntry type="jdk" jdkName="Poetry (chatapp-api)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.10.8 WSL (Ubuntu-22.04): (/home/togrulir/.cache/pypoetry/virtualenvs/chatapp-api-tF-g22J0-py3.10/bin/python)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
 </module>

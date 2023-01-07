@@ -66,10 +66,16 @@ def get_service(
     yield service(db_session)
 
 
+class AuthWebSocket(WebSocket):
+    """Websocket with authenticated user's id attribute."""
+
+    user_id: int
+
+
 def get_auth_websocket(
     websocket: WebSocket,
     user_id: int = Depends(get_current_user_id_from_cookie),
-) -> WebSocket:
+) -> AuthWebSocket:
     """
     Dependency returns websocket with the id of the logged in user.
     Access token is taken from the `access_token` cookie.

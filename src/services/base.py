@@ -22,6 +22,7 @@ class BaseService:
 
     model: ClassVar[Any]
     session: Session
+    paginator = None
 
     def _get_by_pk(self, pk: Any) -> Any:
         """Returns item with matching pk, or None if item is not found."""

@@ -11,6 +11,9 @@ This app is a real time chat api where people can chat with their friends.
     Create migration
     $ alembic revision --autogenerate -n init
 
+    Apply migrations
+    $ alembic upgrade head
+
 ## Functionality
 
 1. Friendship system, people can befriend with each other.
