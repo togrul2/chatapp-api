@@ -1,3 +1,5 @@
+"""DB services for chat related models & routes."""
+
 from typing import Optional
 
 from sqlalchemy.orm import defer, joinedload
@@ -9,6 +11,8 @@ from services.base import CreateUpdateDeleteService
 
 
 class ChatService(CreateUpdateDeleteService):
+    """DB Service for chat model."""
+
     model = Chat
     user_id: int
 
@@ -27,6 +31,7 @@ class ChatService(CreateUpdateDeleteService):
         return chat
 
     def set_user(self, user_id: int):
+        """Setter for `user_id`"""
         self.user_id = user_id
 
     def _get_chat(self, user1_id: int, user2_id: int) -> Optional[Chat]:
@@ -67,6 +72,7 @@ class ChatService(CreateUpdateDeleteService):
         return message
 
     def get_messages_with_user(self, target_id: int):
+        """Returns messages with given user."""
         if not self.user_id:
             raise Exception("Set the authenticated user id first")
 
@@ -77,8 +83,7 @@ class ChatService(CreateUpdateDeleteService):
             .filter(Message.chat_id == chat.id)
         )
 
-        # TODO: add pagination
-        if self.paginator:
-            query = self.paginator.paginate(query)
+        if self._paginator:
+            return self._paginator.get_paginated_response(query)
 
         return query.all()

@@ -142,7 +142,6 @@ class TestUsersMe:
             img.save(image_file, format="JPEG")
             image_file.seek(0)
             yield image_file
-            os.remove(image_file.name)
 
     def test_get_user_successful(self, auth_client):
         """Tests get logged in user endpoint successful"""
@@ -228,8 +227,8 @@ class TestListUsers:
         body = response.json()
 
         assert response.status_code == status.HTTP_200_OK
-        assert len(body) == 1
-        assert body[0]["id"] == user.id
+        assert len(body["results"]) == 1
+        assert body["results"][0]["id"] == user.id
 
     def test_list_users_with_keyword(self, user: User, client):
         """Tests listing users with filtering options.
@@ -239,8 +238,8 @@ class TestListUsers:
         body = response.json()
 
         assert response.status_code == status.HTTP_200_OK
-        assert len(body) == 1
-        assert body[0]["id"] == user.id
+        assert len(body["results"]) == 1
+        assert body["results"][0]["id"] == user.id
 
 
 class TestRetrieveUser:

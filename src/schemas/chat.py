@@ -29,6 +29,8 @@ class ChatRead(BaseChat):
 
 
 class BaseMessage(BaseModel):
+    """Base Message model pydantic model(schema)"""
+
     body: str
     chat_id: int
 
@@ -37,6 +39,8 @@ class BaseMessage(BaseModel):
 
 
 class MessageRead(BaseMessage):
+    """Pydantic model for validating message read model"""
+
     id: int
     sender: UserRead
     created_at: datetime

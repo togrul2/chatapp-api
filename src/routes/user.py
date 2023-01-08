@@ -6,12 +6,15 @@ from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, status
 from fastapi.security import OAuth2PasswordRequestForm
 
 import authentication
+import utils
 from dependencies import (
     get_current_user_id_from_bearer,
+    get_paginator,
     get_staticfiles_manager,
     get_user_service,
 )
-from schemas.base import DetailMessage
+from paginator import BasePaginator
+from schemas.base import DetailMessage, PaginatedResponse
 from schemas.user import UserBase, UserCreate, UserPartialUpdate, UserRead
 from services.user import UserService, get_pfp_path
 from staticfiles import BaseStaticFilesManager
@@ -65,16 +68,17 @@ async def refresh(
     return user_service.refresh_tokens(refresh_token)
 
 
-@router.get("/users", response_model=list[UserRead])
+@router.get("/users", response_model=PaginatedResponse[UserRead])
 async def get_users(
     keyword: str | None = None,
     user_service: UserService = Depends(get_user_service),
+    paginator: BasePaginator[UserRead] = Depends(get_paginator),
 ):
     """
     Lists users, also can perform search with keyword
-    which will be compared to users' username and password.
+    which will be compared to users' username and email.
     - **keyword**: keyword url parameter which will be
-        used to find users with matching username or password.
+        used to find users with matching username or email.
     \f
     :param keyword: query param for user search.
     :param user_service: service providing user model operations.
@@ -82,6 +86,8 @@ async def get_users(
     """
     # If we have a present keyword, we would filter result,
     # otherwise send all data.
+    user_service.set_paginator(paginator)
+
     if keyword:
         expression = keyword + "%"
         return user_service.filter_by_username_or_email(expression, expression)
@@ -206,7 +212,8 @@ async def upload_profile_picture(
     path = get_pfp_path(user_id)
 
     # Adding uuid4 to filename
-    filename, ext = profile_picture.filename.rsplit(".", 1)
+    file_fullname = utils.split_path(profile_picture.filename)[-1]
+    filename, ext = file_fullname.rsplit(".", 1)
     filename = f"{filename}_{uuid.uuid4()}"
     profile_picture.filename = ".".join([filename, ext])
 

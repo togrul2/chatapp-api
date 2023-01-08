@@ -18,7 +18,7 @@ class TestFriendshipRequestList:
         body = response.json()
 
         assert response.status_code == status.HTTP_200_OK
-        assert friendship_request.id == body[0]["id"]
+        assert friendship_request.id == body["results"][0]["id"]
 
 
 class TestFriendshipRequestDetail:
@@ -72,7 +72,7 @@ class TestFriendshipRequestDetail:
         """Test rejecting friendship request from a target user."""
         # target id must be preserved
         # since after rejection friendship record will be deleted
-        target_id = sender_user.id
+        target_id = friendship_request.id
         response = auth_client.delete(self.get_url(cast(int, sender_user.id)))
 
         assert response.status_code == status.HTTP_204_NO_CONTENT

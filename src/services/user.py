@@ -8,6 +8,7 @@ from exceptions import base as base_exception
 from exceptions import user as user_exceptions
 from models.user import User
 from schemas import user as user_schemas
+from schemas.base import PaginatedResponse
 from services.base import CreateUpdateDeleteService
 
 
@@ -50,6 +51,10 @@ class UserService(CreateUpdateDeleteService):
         ) is not None:
             raise user_exceptions.EmailAlreadyTaken
 
+    def get_by_pk(self, pk: Any) -> Any:
+        """Returns ites based on its primary key"""
+        return self._get_by_pk(pk)
+
     def _get_by_username(self, username: str):
         """Returns user with matching username"""
         return (
@@ -79,16 +84,17 @@ class UserService(CreateUpdateDeleteService):
 
     def filter_by_username_or_email(
         self, username: str, email: str
-    ) -> list[Any]:
+    ) -> PaginatedResponse[user_schemas.UserRead]:
         """List users by matching username or email."""
-        return (
-            self.session.query(self.model)
-            .filter(
-                (self.model.username.like(username))
-                | (self.model.email.like(email))
-            )
-            .all()
+        query = self.session.query(self.model).filter(
+            (self.model.username.like(username))
+            | (self.model.email.like(email))
         )
+
+        if self._paginator:
+            return self._paginator.get_paginated_response(query)
+
+        return query.all()
 
     def update_profile_picture(self, user_id: int, image_url: str) -> Any:
         """
@@ -113,6 +119,7 @@ class UserService(CreateUpdateDeleteService):
         return user
 
     def authenticate_user(self, username: str, password: str):
+        """Returns user model if given username and password are correct."""
         user = self._get_by_username(username)
         # If user with that username is not found or password is wrong, fail.
         if (
@@ -123,6 +130,7 @@ class UserService(CreateUpdateDeleteService):
         return user
 
     def refresh_tokens(self, refresh_token: str):
+        """Returns new access and refresh tokens if refresh token is valid."""
         user_id = authentication.verify_refresh_token(refresh_token)
         if self._get_by_pk(user_id) is None:
             raise user_exceptions.HTTPBadTokenException

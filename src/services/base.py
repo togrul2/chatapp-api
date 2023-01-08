@@ -5,6 +5,7 @@ from typing import Any, ClassVar
 from sqlalchemy.orm import Session
 
 from exceptions import base as base_exceptions
+from paginator import BasePaginator
 from schemas.base import BaseModel
 
 
@@ -22,15 +23,24 @@ class BaseService:
 
     model: ClassVar[Any]
     session: Session
-    paginator = None
+    _paginator: BasePaginator | None = None
 
     def _get_by_pk(self, pk: Any) -> Any:
         """Returns item with matching pk, or None if item is not found."""
         return self.session.query(self.model).get(pk)
 
+    def set_paginator(self, paginator: BasePaginator):
+        """Set paginator for service"""
+        self._paginator = paginator
+
     def all(self):
         """Returns list of all records."""
-        return self.session.query(self.model).all()
+        query = self.session.query(self.model)
+
+        if self._paginator:
+            return self._paginator.get_paginated_response(query)
+
+        return query.all()
 
     def get_or_404(self, pk: Any) -> Any:
         """Returns item with matching pk. If nothing found raises NotFound."""

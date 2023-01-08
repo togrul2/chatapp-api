@@ -61,6 +61,7 @@ uvicorn = "0.18.3"
 watchfiles = "0.16.1"
 aioredis = "^2.0.1"
 httpx = "^0.23.3"
+broadcaster = {extras = ["redis"], version = "^0.2.0"}
 
 [tool.poetry.group.dev.dependencies]
 coverage = "6.4.4"

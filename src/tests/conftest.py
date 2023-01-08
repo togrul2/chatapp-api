@@ -18,7 +18,12 @@ from dependencies import get_db, get_staticfiles_manager
 from main import app as fastapi_app
 from models.user import Friendship, User
 from staticfiles import LocalStaticFilesManager
-from tests.sql import PostgreSQLSession, create_tables, drop_tables, DBSQLSession
+from tests.sql import (
+    DBSQLSession,
+    PostgreSQLSession,
+    create_tables,
+    drop_tables,
+)
 from utils import SingletonMeta
 
 test_db_name = "test_" + settings.postgres_db

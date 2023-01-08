@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from config import BASE_DIR, STATIC_URL
+from db import broadcast, ping_redis_database, ping_sql_database
 from routes.chat import router as chat_router
 from routes.friendship import router as friendship_router
 from routes.user import router as user_router
@@ -21,6 +22,8 @@ app = FastAPI(
         "name": "Togrul Asadov",
         "github": "https://github.com/togrul2",
     },
+    on_startup=[ping_sql_database, ping_redis_database, broadcast.connect],
+    on_shutdown=[broadcast.disconnect],
 )
 
 app.mount(
@@ -36,17 +39,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-def ping_sql_database():
-    ...
-
-
-@app.on_event("startup")
-def ping_redis_db():
-    ...
-
 
 app.include_router(user_router)
 app.include_router(friendship_router)

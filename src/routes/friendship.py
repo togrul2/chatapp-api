@@ -4,8 +4,10 @@ from fastapi import APIRouter, Depends, status
 from dependencies import (
     get_current_user_id_from_bearer,
     get_friendship_service,
+    get_paginator,
 )
-from schemas.base import DetailMessage
+from paginator import BasePaginator
+from schemas.base import DetailMessage, PaginatedResponse
 from schemas.friendship import FriendshipRead, FriendshipReadWithSender
 from schemas.user import UserRead
 from services.friendship import FriendshipService
@@ -17,13 +19,19 @@ router = APIRouter(
 )
 
 
-@router.get("/requests", response_model=list[FriendshipReadWithSender])
+@router.get(
+    "/requests", response_model=PaginatedResponse[FriendshipReadWithSender]
+)
 async def get_pending_requests(
-    service: FriendshipService = Depends(get_friendship_service),
     user_id: int = Depends(get_current_user_id_from_bearer),
+    service: FriendshipService = Depends(get_friendship_service),
+    paginator: BasePaginator[FriendshipReadWithSender] = Depends(
+        get_paginator
+    ),
 ):
     """Returns list of user's friendship requests pending for response."""
     service.set_user(user_id)
+    service.set_paginator(paginator)
     return service.list_pending_friendships()
 
 
@@ -94,11 +102,13 @@ async def delete_friendship(
     service.decline(target_id)
 
 
-@router.get("/friends", response_model=list[UserRead])
+@router.get("/friends", response_model=PaginatedResponse[UserRead])
 async def get_friends(
-    service: FriendshipService = Depends(get_friendship_service),
     user_id: int = Depends(get_current_user_id_from_bearer),
+    service: FriendshipService = Depends(get_friendship_service),
+    paginator: BasePaginator[UserRead] = Depends(get_paginator),
 ):
     """Returns list of friends."""
     service.set_user(user_id)
+    service.set_paginator(paginator)
     return service.list_friends()

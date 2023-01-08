@@ -8,8 +8,8 @@ from config import settings
 from db import Base
 
 # Models
-from models.chat import Chat, Membership, Message  # noqa
-from models.user import Friendship, User  # noqa
+from models.chat import Chat, Membership, Message  # noqa: F401
+from models.user import Friendship, User  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

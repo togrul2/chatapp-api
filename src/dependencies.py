@@ -2,14 +2,15 @@
 from collections.abc import Callable, Generator
 from functools import partial
 
-from fastapi import Cookie, Depends, WebSocket
+from fastapi import Cookie, Depends, Query, WebSocket
 from sqlalchemy.orm import Session
 
+import config
 from authentication import TokenType, get_user_from_token, oauth2_scheme
-from config import STATIC_DOMAIN, STATIC_ROOT, STATIC_URL
 from db import SessionLocal
 from exceptions.chat import WebSocketBadTokenException
 from exceptions.user import HTTPBadTokenException
+from paginator import LimitOffsetPaginator
 from services.base import BaseService
 from services.chat import ChatService
 from services.friendship import FriendshipService
@@ -28,7 +29,9 @@ def get_db() -> Generator[Session, None, None]:
 
 def get_staticfiles_manager() -> BaseStaticFilesManager:
     """Dependency for staticfiles"""
-    return LocalStaticFilesManager(STATIC_DOMAIN, STATIC_URL, STATIC_ROOT)
+    return LocalStaticFilesManager(
+        config.STATIC_DOMAIN, config.STATIC_URL, config.STATIC_ROOT
+    )
 
 
 def get_current_user_id_from_bearer(
@@ -51,6 +54,14 @@ def get_current_user_id_from_cookie(access_token: str = Cookie()) -> int:
     return get_user_from_token(
         TokenType.ACCESS, WebSocketBadTokenException, access_token
     )
+
+
+def get_paginator(
+    page: int = Query(default=1),
+    page_size: int = Query(default=config.PAGE_SIZE_DEFAULT),
+):
+    """Returns pagination with page and page size query params."""
+    return LimitOffsetPaginator(page, page_size)
 
 
 def get_service(

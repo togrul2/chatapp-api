@@ -1,7 +1,6 @@
 """Friendship services module."""
 from sqlalchemy.orm import defer, joinedload
 
-import config
 from exceptions import base as base_exceptions
 from exceptions import friendship as friendship_exceptions
 from models.user import Friendship, User
@@ -18,6 +17,7 @@ class FriendshipService(CreateUpdateDeleteService):
     model = Friendship
 
     def set_user(self, user_id: int):
+        """Sets user model and service based on given user id."""
         self.user_service = UserService(self.session)
         self.user = self.user_service.get_or_401(user_id)
 
@@ -33,9 +33,13 @@ class FriendshipService(CreateUpdateDeleteService):
                 & (self.model.accepted == None)  # noqa: E711
             )
         )
+
+        if self._paginator:
+            return self._paginator.get_paginated_response(query)
+
         return query.all()
 
-    def list_friends(self, page: int = 1, page_size: int = config.PAGE_SIZE_DEFAULT):
+    def list_friends(self):
         """List of all friends user has."""
         sent = (
             self.session.query(User)
@@ -57,17 +61,17 @@ class FriendshipService(CreateUpdateDeleteService):
 
         query = sent.union(received)
 
-        if self.paginator:
-            self.paginator.paginate(query, page, page_size)
+        if self._paginator:
+            return self._paginator.get_paginated_response(query)
 
         return query.all()
 
     def _get_friendship_request(self, target_id: int):
         """Returns matching friendship request with target."""
         query = self.session.query(self.model).filter(
-            (self.model.sender_id == target_id) &
-            (self.model.receiver_id == self.user.id) &
-            (self.model.accepted == None)  # noqa: E712
+            (self.model.sender_id == target_id)
+            & (self.model.receiver_id == self.user.id)
+            & (self.model.accepted == None)  # noqa: E711
         )
         return query.first()
 

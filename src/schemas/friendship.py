@@ -1,3 +1,4 @@
+"""Pydantic validation modelds(schemas) for Friendship related routes."""
 from datetime import datetime
 
 from pydantic import BaseModel

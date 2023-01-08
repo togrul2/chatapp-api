@@ -14,8 +14,11 @@ class DetailMessage(BaseModel):
 T = TypeVar("T", int, str)
 
 
-class Paginated(GenericModel, Generic[T]):
+class PaginatedResponse(GenericModel, Generic[T]):
+    """Pydantic model for validating paginatel list response."""
+
     results: list[T]
     total_pages: int
     total_records: int
     current_page: int
+    items_per_page: int
