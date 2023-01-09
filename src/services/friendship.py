@@ -4,12 +4,14 @@ from sqlalchemy.orm import defer, joinedload
 from exceptions import base as base_exceptions
 from exceptions import friendship as friendship_exceptions
 from models.user import Friendship, User
-from schemas.friendship import FriendshipCreate
+from schemas.base import PaginatedResponse
+from schemas.friendship import FriendshipReadWithSender
+from schemas.user import UserRead
 from services.base import CreateUpdateDeleteService
 from services.user import UserService
 
 
-class FriendshipService(CreateUpdateDeleteService):
+class FriendshipService(CreateUpdateDeleteService[Friendship]):
     """Friendship service class with db manipulation methods."""
 
     user_service: UserService
@@ -21,7 +23,9 @@ class FriendshipService(CreateUpdateDeleteService):
         self.user_service = UserService(self.session)
         self.user = self.user_service.get_or_401(user_id)
 
-    def list_pending_friendships(self):
+    def list_pending_friendships(
+        self,
+    ) -> PaginatedResponse[FriendshipReadWithSender]:
         """List of users pending requests"""
         query = (
             self.session.query(self.model)
@@ -39,7 +43,7 @@ class FriendshipService(CreateUpdateDeleteService):
 
         return query.all()
 
-    def list_friends(self):
+    def list_friends(self) -> PaginatedResponse[UserRead]:
         """List of all friends user has."""
         sent = (
             self.session.query(User)
@@ -66,7 +70,7 @@ class FriendshipService(CreateUpdateDeleteService):
 
         return query.all()
 
-    def _get_friendship_request(self, target_id: int):
+    def _get_friendship_request(self, target_id: int) -> Friendship:
         """Returns matching friendship request with target."""
         query = self.session.query(self.model).filter(
             (self.model.sender_id == target_id)
@@ -75,7 +79,7 @@ class FriendshipService(CreateUpdateDeleteService):
         )
         return query.first()
 
-    def _get_friendship(self, target_id: int):
+    def _get_friendship(self, target_id: int) -> Friendship:
         """Returns matching friendship with target."""
         query = self.session.query(self.model).filter(
             (
@@ -89,7 +93,7 @@ class FriendshipService(CreateUpdateDeleteService):
         )
         return query.first()
 
-    def get_friendship_with_user_or_404(self, target_id: int):
+    def get_friendship_with_user_or_404(self, target_id: int) -> Friendship:
         """
         Returns friendship with user.
         Raises NotFound if users are not friends.
@@ -98,7 +102,9 @@ class FriendshipService(CreateUpdateDeleteService):
             raise base_exceptions.NotFound
         return friendship
 
-    def get_friendship_request_with_user_or_404(self, target_id: int):
+    def get_friendship_request_with_user_or_404(
+        self, target_id: int
+    ) -> Friendship:
         """
         Returns friendship request from target.
         Raises NotFound if user hasn't sent request.
@@ -118,7 +124,7 @@ class FriendshipService(CreateUpdateDeleteService):
         self.user_service.get_or_404(target_id)
 
         return self.create(
-            FriendshipCreate(receiver_id=target_id, sender_id=self.user.id)
+            {"receiver_id": target_id, "sender_id": self.user.id}
         )
 
     def approve(self, target_id: int) -> Friendship:

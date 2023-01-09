@@ -2,7 +2,8 @@
 Module with chat related models.
 """
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import relationship
+from sqlalchemy.ext.hybrid import hybrid_property
+from sqlalchemy.orm import object_session, relationship
 
 from models.base import Base, CreateTimestampMixin
 
@@ -19,6 +20,7 @@ class Membership(Base):
     chat_id = Column(Integer, ForeignKey("chat.id"))
     accepted = Column(Boolean)
     is_admin = Column(Boolean, default=False, nullable=False)
+    is_owner = Column(Boolean, default=False, nullable=False)
 
 
 class Chat(CreateTimestampMixin, Base):
@@ -33,6 +35,16 @@ class Chat(CreateTimestampMixin, Base):
         "User", secondary="membership", back_populates="chats"
     )
     messages = relationship("Message", backref="chat")
+
+    @hybrid_property
+    def number_of_members(self):
+        """Returns count of members in chat"""
+        return (
+            object_session(self)
+            .query(Membership)
+            .filter(Membership.chat_id == self.id)
+            .count()
+        )
 
 
 class Message(CreateTimestampMixin, Base):

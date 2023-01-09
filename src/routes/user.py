@@ -69,7 +69,7 @@ async def refresh(
 
 
 @router.get("/users", response_model=PaginatedResponse[UserRead])
-async def get_users(
+def list_users(
     keyword: str | None = None,
     user_service: UserService = Depends(get_user_service),
     paginator: BasePaginator[UserRead] = Depends(get_paginator),
@@ -89,8 +89,7 @@ async def get_users(
     user_service.set_paginator(paginator)
 
     if keyword:
-        expression = keyword + "%"
-        return user_service.filter_by_username_or_email(expression, expression)
+        return user_service.search(keyword)
 
     return user_service.all()
 
@@ -101,7 +100,7 @@ async def get_users(
     response_model=UserRead,
     responses={status.HTTP_400_BAD_REQUEST: {"model": DetailMessage}},
 )
-async def create_user(
+def create_user(
     data: UserCreate, user_service: UserService = Depends(get_user_service)
 ):
     """
@@ -115,11 +114,11 @@ async def create_user(
     :param data: User input.
     :param user_service: service providing user model operations.
     """
-    return user_service.create(data)
+    return user_service.create_user(data)
 
 
 @router.get("/users/me", response_model=UserRead)
-async def get_auth_user(
+def get_auth_user(
     user_id: int = Depends(get_current_user_id_from_bearer),
     user_service: UserService = Depends(get_user_service),
 ):
@@ -138,7 +137,7 @@ async def get_auth_user(
     response_model=UserRead,
     responses={status.HTTP_400_BAD_REQUEST: {"model": DetailMessage}},
 )
-async def update_auth_user(
+def update_auth_user(
     data: UserBase,
     user_id: int = Depends(get_current_user_id_from_bearer),
     user_service: UserService = Depends(get_user_service),
@@ -164,7 +163,7 @@ async def update_auth_user(
     response_model=UserRead,
     responses={status.HTTP_400_BAD_REQUEST: {"model": DetailMessage}},
 )
-async def partial_update_auth_user(
+def partial_update_auth_user(
     data: UserPartialUpdate,
     user_id: int = Depends(get_current_user_id_from_bearer),
     user_service: UserService = Depends(get_user_service),
@@ -185,7 +184,7 @@ async def partial_update_auth_user(
 
 
 @router.post("/users/me/image", response_model=UserRead)
-async def upload_profile_picture(
+def upload_profile_picture(
     profile_picture: UploadFile,
     user_id: int = Depends(get_current_user_id_from_bearer),
     user_service: UserService = Depends(get_user_service),
@@ -227,7 +226,7 @@ async def upload_profile_picture(
 
 
 @router.delete("/users/me/image", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_profile_picture(
+def remove_profile_picture(
     user_id: int = Depends(get_current_user_id_from_bearer),
     user_service: UserService = Depends(get_user_service),
 ):
@@ -241,7 +240,7 @@ async def remove_profile_picture(
 
 
 @router.delete("/users/me", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_auth_user(
+def delete_auth_user(
     user_id: int = Depends(get_current_user_id_from_bearer),
     user_service: UserService = Depends(get_user_service),
 ):
@@ -260,7 +259,7 @@ async def delete_auth_user(
     response_model=UserRead,
     responses={status.HTTP_404_NOT_FOUND: {"model": DetailMessage}},
 )
-async def get_user_by_id(
+def get_user_by_id(
     user_id: int, user_service: UserService = Depends(get_user_service)
 ):
     """
@@ -279,7 +278,7 @@ async def get_user_by_id(
     response_model=UserRead,
     responses={status.HTTP_404_NOT_FOUND: {"model": DetailMessage}},
 )
-async def get_user_by_username(
+def get_user_by_username(
     username: str, user_service: UserService = Depends(get_user_service)
 ):
     """

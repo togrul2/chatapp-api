@@ -1,16 +1,18 @@
 """Base services module."""
 from dataclasses import dataclass
-from typing import Any, ClassVar
+from typing import Any, ClassVar, Generic, TypeVar
 
 from sqlalchemy.orm import Session
 
 from exceptions import base as base_exceptions
 from paginator import BasePaginator
-from schemas.base import BaseModel
+from schemas.base import BaseModel, PaginatedResponse
+
+T = TypeVar("T")
 
 
 @dataclass
-class BaseService:
+class BaseService(Generic[T]):
     """
     Base service class with database operation for models.
 
@@ -21,7 +23,7 @@ class BaseService:
 
     """
 
-    model: ClassVar[Any]
+    model: ClassVar[T]
     session: Session
     _paginator: BasePaginator | None = None
 
@@ -33,15 +35,6 @@ class BaseService:
         """Set paginator for service"""
         self._paginator = paginator
 
-    def all(self):
-        """Returns list of all records."""
-        query = self.session.query(self.model)
-
-        if self._paginator:
-            return self._paginator.get_paginated_response(query)
-
-        return query.all()
-
     def get_or_404(self, pk: Any) -> Any:
         """Returns item with matching pk. If nothing found raises NotFound."""
         item = self._get_by_pk(pk)
@@ -50,21 +43,34 @@ class BaseService:
         return item
 
 
-class CreateServiceMixin(BaseService):
+class ListMixin(BaseService[T]):
+    """Mixin class for all() operation."""
+
+    def all(self) -> PaginatedResponse[T] | list[T]:
+        """Returns list of all records."""
+        query = self.session.query(self.model)
+
+        if self._paginator:
+            return self._paginator.get_paginated_response(query)
+
+        return query.all()
+
+
+class CreateServiceMixin(BaseService[T]):
     """Mixin class for create() operation."""
 
-    def create(self, schema: BaseModel) -> Any:
+    def create(self, schema: dict[str, Any]) -> T:
         """Creates and returns item."""
-        item = self.model(**schema.dict())
+        item = self.model(**schema)
         self.session.add(item)
         self.session.commit()
         return item
 
 
-class UpdateServiceMixin(BaseService):
+class UpdateServiceMixin(BaseService[T]):
     """Mixin with update() operation."""
 
-    def update(self, pk, schema: BaseModel) -> Any:
+    def update(self, pk, schema: BaseModel) -> T:
         """Updates and returns updated item."""
         item = self.get_or_404(pk)
 
@@ -77,7 +83,7 @@ class UpdateServiceMixin(BaseService):
         return item
 
 
-class DeleteServiceMixin(BaseService):
+class DeleteServiceMixin(BaseService[T]):
     """Mixin with delete() operation."""
 
     def delete(self, pk: Any) -> None:
@@ -88,6 +94,9 @@ class DeleteServiceMixin(BaseService):
 
 
 class CreateUpdateDeleteService(
-    CreateServiceMixin, UpdateServiceMixin, DeleteServiceMixin, BaseService
+    CreateServiceMixin[T],
+    UpdateServiceMixin[T],
+    DeleteServiceMixin[T],
+    BaseService[T],
 ):
     """Service with create, update and delete methods."""

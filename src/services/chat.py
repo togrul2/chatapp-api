@@ -1,12 +1,14 @@
 """DB services for chat related models & routes."""
 
-from typing import Optional
+from typing import Any
 
 from sqlalchemy.orm import defer, joinedload
 
+from exceptions.base import NotFound
 from models.chat import Chat, Membership, Message
 from models.user import User
-from schemas.chat import ChatCreate
+from schemas.base import PaginatedResponse
+from schemas.chat import ChatCreate, MessageRead
 from services.base import CreateUpdateDeleteService
 
 
@@ -16,26 +18,29 @@ class ChatService(CreateUpdateDeleteService):
     model = Chat
     user_id: int
 
-    def create(self, schema: ChatCreate) -> Chat:
+    def create(self, schema_dict: dict[str, Any]) -> Chat:
         """Custom create method for chat model."""
-        schema_dict = schema.dict()
         users = schema_dict.pop("users")
 
         chat = Chat(**schema_dict)
 
         for user_id in users:
+            # TODO: Optimize, bulk create
             chat.users.append(self.session.query(User).get(user_id))
 
         self.session.add(chat)
         self.session.commit()
         return chat
 
-    def set_user(self, user_id: int):
+    def set_user(self, user_id: int) -> None:
         """Setter for `user_id`"""
         self.user_id = user_id
 
-    def _get_chat(self, user1_id: int, user2_id: int) -> Optional[Chat]:
+    def _get_private_chat(self, user1_id: int, user2_id: int) -> Chat | None:
         """Returns private chat with given users' ids."""
+        if user1_id == user2_id:
+            return None
+
         return (
             self.session.query(self.model)
             .filter(
@@ -54,16 +59,16 @@ class ChatService(CreateUpdateDeleteService):
     def get_or_create_private_chat(self, user1_id: int, user2_id: int) -> Chat:
         """Returns private chat of given two users.
         If it doesn't exist, creates it."""
-        chat = self._get_chat(user1_id, user2_id)
+        chat = self._get_private_chat(user1_id, user2_id)
 
         if chat is None:
-            self.create(
-                ChatCreate.construct(private=True, users=[user1_id, user2_id])
-            )
+            self.create({"private": True, "users": [user1_id, user2_id]})
 
         return chat
 
-    def create_message(self, chat_id: int, sender_id: int, body: str):
+    def create_message(
+        self, chat_id: int, sender_id: int, body: str
+    ) -> Message:
         """Creates message at given chat from
         given sender to given receiver."""
         message = Message(chat_id=chat_id, sender_id=sender_id, body=body)
@@ -71,19 +76,64 @@ class ChatService(CreateUpdateDeleteService):
         self.session.commit()
         return message
 
-    def get_messages_with_user(self, target_id: int):
-        """Returns messages with given user."""
+    def get_messages_from_private_chat(
+        self, target_id: int
+    ) -> PaginatedResponse[MessageRead]:
+        """Returns messages from a private chat with a given id."""
         if not self.user_id:
             raise Exception("Set the authenticated user id first")
 
-        chat = self._get_chat(self.user_id, target_id)
+        chat = self._get_private_chat(self.user_id, target_id)
+
+        if chat is None:
+            raise NotFound
+
         query = (
             self.session.query(Message)
             .options(joinedload(Message.sender), defer("sender_id"))
             .filter(Message.chat_id == chat.id)
+            .order_by(Message.created_at.desc())
         )
 
         if self._paginator:
             return self._paginator.get_paginated_response(query)
 
         return query.all()
+
+    def _create_membership(
+        self, membership_dict: dict[str, Any]
+    ) -> Membership:
+        """Creates membership based on given schema"""
+        membership = Membership(**membership_dict)
+        self.session.add(membership)
+        self.session.commit()
+        return membership
+
+    def _validate_not_null_unique_chat_name(
+        self, name: str, chat_id: int | None = None
+    ):
+        """Validates whether there are chats with the same name as given one.
+        Empty names can be duplicated, so they won't count.
+        Also checks whether this name belongs to target chat if it exists."""
+        raise NotImplementedError()
+
+    def create_public_chat(self, schema: ChatCreate) -> Chat:
+        """Creates chat with membership to a given user."""
+        if self.user_id in schema.users:
+            schema.users.remove(self.user_id)
+
+        self._validate_not_null_unique_chat_name(schema.name)
+
+        payload = schema.dict()
+        payload.update({"private": False})
+        chat = self.create(payload)
+        self._create_membership(
+            {
+                "user_id": self.user_id,
+                "chat_id": chat.id,
+                "is_owner": True,
+                "is_admin": True,
+                "accepted": True,
+            }
+        )
+        return chat
