@@ -2,14 +2,19 @@
 
 from typing import Any
 
+from sqlalchemy import Column
 from sqlalchemy.orm import defer, joinedload
 
 from exceptions.base import NotFound
-from exceptions.chat import ChatNameTakenHTTPException
+from exceptions.chat import (
+    ChatNameTakenException,
+    UserNotAdminException,
+    UserNotOwnerException,
+)
 from models.chat import Chat, Membership, Message
 from models.user import User
 from schemas.base import PaginatedResponse
-from schemas.chat import ChatCreate, ChatRead, MessageRead
+from schemas.chat import ChatCreate, ChatRead, ChatUpdate, MessageRead
 from services.base import CreateUpdateDeleteService, ListMixin
 
 
@@ -123,7 +128,7 @@ class ChatService(ListMixin, CreateUpdateDeleteService):
             query.filter(self.model.id != chat_id)
 
         if query.first() is not None:
-            raise ChatNameTakenHTTPException
+            raise ChatNameTakenException
 
     def all(self) -> PaginatedResponse[ChatRead] | list[ChatRead]:
         """Returns list of all records."""
@@ -170,3 +175,56 @@ class ChatService(ListMixin, CreateUpdateDeleteService):
             }
         )
         return chat
+
+    def get_public_chat(self, chat_id: int) -> Chat | None:
+        """Returns single chat with given id.
+        If it does not exists, returns 404 error code."""
+        chat = (
+            self.session.query(self.model)
+            .filter(
+                (self.model.id == chat_id)
+                & (self.model.private == False)  # noqa: E712
+            )
+            .first()
+        )
+
+        if chat is None:
+            raise NotFound
+
+        return chat
+
+    def _check_role(self, chat_id: int, role: Column) -> bool:
+        """Returns whether set user has given role in chat or not."""
+        query = self.session.query(Membership).filter(
+            (Membership.chat_id == chat_id)
+            & (Membership.user_id == self.user_id)
+            & (role == True)  # noqa: E712
+        )
+        return query.first() is not None
+
+    def _is_chat_admin(self, chat_id: int) -> bool:
+        """Returns whether set user is given chat's admin or not."""
+        return self._check_role(chat_id, Membership.is_admin)
+
+    def _is_chat_owner(self, chat_id: int) -> bool:
+        """Returns whether set user is given chat's admin or not."""
+        return self._check_role(chat_id, Membership.is_owner)
+
+    def update_chat(self, chat_id: int, payload: ChatUpdate) -> Chat | None:
+        """Updates chat's information."""
+        if not self._is_chat_admin(chat_id):
+            raise UserNotAdminException
+
+        return self.update(chat_id, payload.dict())
+
+    def delete_chat(self, chat_id: int) -> None:
+        """Deletes public chat with given id.
+        If chat doesn't exists, raises 404 http exception."""
+        if not self._is_chat_owner(chat_id):
+            raise UserNotOwnerException
+
+        self.session.query(Membership).filter(
+            Membership.chat_id == chat_id
+        ).delete()
+
+        return self.delete(chat_id)

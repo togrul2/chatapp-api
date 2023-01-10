@@ -155,7 +155,7 @@ def update_auth_user(
     :return: Updated user data
     """
 
-    return user_service.update(user_id, data)
+    return user_service.update_user(user_id, data)
 
 
 @router.patch(
@@ -180,7 +180,7 @@ def partial_update_auth_user(
     :param user_service: service providing user model operations.
     :return: Updated user data
     """
-    return user_service.update(user_id, data)
+    return user_service.update_user(user_id, data)
 
 
 @router.post("/users/me/image", response_model=UserRead)

@@ -148,7 +148,7 @@ class UserService(ListMixin[User], CreateUpdateDeleteService[User]):
             "refresh_token": authentication.create_refresh_token(user_id),
         }
 
-    def update(
+    def update_user(
         self,
         pk,
         schema: (user_schemas.UserPartialUpdate | user_schemas.UserBase),
@@ -164,4 +164,4 @@ class UserService(ListMixin[User], CreateUpdateDeleteService[User]):
         if schema.email:
             self._validate_email_uniqueness(schema.email, pk)
 
-        return super().update(pk, schema)
+        return super().update(pk, schema.dict())

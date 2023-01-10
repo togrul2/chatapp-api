@@ -1,4 +1,5 @@
 """Base services module."""
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, ClassVar, Generic, TypeVar
 
@@ -6,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from exceptions import base as base_exceptions
 from paginator import BasePaginator
-from schemas.base import BaseModel, PaginatedResponse
+from schemas.base import PaginatedResponse
 
 T = TypeVar("T")
 
@@ -70,11 +71,11 @@ class CreateServiceMixin(BaseService[T]):
 class UpdateServiceMixin(BaseService[T]):
     """Mixin with update() operation."""
 
-    def update(self, pk, schema: BaseModel) -> T:
+    def update(self, pk, schema: Mapping[str, Any]) -> T:
         """Updates and returns updated item."""
         item = self.get_or_404(pk)
 
-        for field, value in schema.dict().items():
+        for field, value in schema.items():
             if value is not None:
                 setattr(item, field, value)
 

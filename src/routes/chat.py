@@ -13,12 +13,12 @@ from dependencies import (
 )
 from paginator import BasePaginator
 from schemas.base import DetailMessage, PaginatedResponse
-from schemas.chat import ChatCreate, ChatRead, MessageRead
+from schemas.chat import ChatCreate, ChatRead, ChatUpdate, MessageRead
 from services.chat import ChatService
 from services.user import UserService
 from websocket_managers.chat import PrivateMessageManager
 
-router = APIRouter(prefix="/chat", tags=["chat"])
+router = APIRouter(prefix="/api", tags=["chat"])
 
 
 @router.websocket("/privates")
@@ -38,7 +38,7 @@ async def private_messages(
 
 
 @router.get(
-    "/private/messages/{target_id}",
+    "/users/{target_id}/messages",
     response_model=PaginatedResponse[MessageRead],
 )
 def get_private_messages_from_user(
@@ -88,19 +88,48 @@ def create_public_chat(
     return chat_service.create_public_chat(chat)
 
 
-@router.get("/chats/{chat_id}")
-def get_public_chat(chat_id: int):
-    """Get public chat detail."""
+@router.get(
+    "/chats/{chat_id}",
+    response_model=ChatRead,
+    responses={status.HTTP_404_NOT_FOUND: {"model": DetailMessage}},
+)
+def get_public_chat(
+    chat_id: int, service: ChatService = Depends(get_chat_service)
+):
+    """Get public chat detail with given id.
+    If no public chat is found returns 404."""
+    return service.get_or_404(chat_id)
 
 
-@router.put("/chats/{chat_id}")
-def update_public_chat(chat_id: int):
+@router.put(
+    "/chats/{chat_id}",
+    response_model=ChatRead,
+    responses={status.HTTP_403_FORBIDDEN: {"model": DetailMessage}},
+)
+def update_public_chat(
+    chat_id: int,
+    data: ChatUpdate,
+    user_id: int = Depends(get_current_user_id_from_bearer),
+    service: ChatService = Depends(get_chat_service),
+):
     """Update public chat info. If user is not admin, returns 403."""
+    service.set_user(user_id)
+    return service.update_chat(chat_id, data)
 
 
-@router.delete("/chats/{chat_id}")
-def delete_public_chat(chat_id: int):
+@router.delete(
+    "/chats/{chat_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={status.HTTP_403_FORBIDDEN: {"model": DetailMessage}},
+)
+def delete_public_chat(
+    chat_id: int,
+    user_id: int = Depends(get_current_user_id_from_bearer),
+    service: ChatService = Depends(get_chat_service),
+):
     """Deletes chat with given id. If user is not owner, returns 403."""
+    service.set_user(user_id)
+    service.delete_chat(chat_id)
 
 
 @router.post("/chats/{chat_id}/invite-link")

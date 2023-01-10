@@ -30,6 +30,12 @@ class ChatRead(BaseChat):
     created_at: datetime
 
 
+class ChatUpdate(BaseChat):
+    """Pydantic model for validating chat update payload."""
+
+    name: constr(min_length=2, strip_whitespace=True)
+
+
 class BaseMessage(BaseModel):
     """Base Message model pydantic model(schema)"""
 

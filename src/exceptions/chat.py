@@ -5,7 +5,17 @@ WebSocketBadTokenException = WebSocketException(
     reason="Authentication token is expired or incorrect",
 )
 
-ChatNameTakenHTTPException = HTTPException(
+ChatNameTakenException = HTTPException(
     status_code=status.HTTP_409_CONFLICT,
     detail="This chat name is already taken by another chat.",
+)
+
+UserNotAdminException = HTTPException(
+    status_code=status.HTTP_403_FORBIDDEN,
+    detail="This action is only available for chat admins.",
+)
+
+UserNotOwnerException = HTTPException(
+    status_code=status.HTTP_403_FORBIDDEN,
+    detail="This action is only available for chat owner.",
 )
