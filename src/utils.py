@@ -2,6 +2,7 @@
 import re
 from collections.abc import MutableMapping
 from typing import Any
+from urllib import parse
 
 
 class SingletonMeta(type):
@@ -21,9 +22,6 @@ def split_path(path: str) -> list[str]:
 
     Example:
         >>> split_path('C:\\Windows\\Temp\\some_file.txt')
-        ['C:', 'Windows', 'Temp', 'some_file.txt']
-
-        >>> split_path(r'C:\Windows\Temp\some_file.txt')  # noqa: W605
         ['C:', 'Windows', 'Temp', 'some_file.txt']
 
         >>> split_path('/tmp/some_file.txt')
@@ -51,3 +49,23 @@ def split_filename(file: str) -> tuple[str, str]:
         return (file,)
 
     return filename, ext
+
+
+def parse_url(url: str) -> dict[str, str]:
+    """Parses url and returns parameters from it.
+
+    Example:
+        >>> URL = 'postgresql+psycopg2://someuser:somepassword@localhost:5432/somedb'  # noqa
+        >>> parse_url(URL)
+        {'hostname': 'localhost', 'port': 5432, 'user': 'someuser', 'password': 'somepassword', 'dbname': 'somedb'}
+
+    """
+
+    params = parse.urlparse(url)
+    return {
+        "hostname": params.hostname,
+        "port": params.port,
+        "user": params.username,
+        "password": params.password,
+        "dbname": params.path[1:],
+    }

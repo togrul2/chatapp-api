@@ -38,9 +38,10 @@ async def private_messages(
 
 
 @router.get(
-    "/messages/{target_id}", response_model=PaginatedResponse[MessageRead]
+    "/private/messages/{target_id}",
+    response_model=PaginatedResponse[MessageRead],
 )
-def get_messages(
+def get_private_messages_from_user(
     target_id: int,
     chat_service: ChatService = Depends(get_chat_service),
     user_id: int = Depends(get_current_user_id_from_bearer),
@@ -52,14 +53,23 @@ def get_messages(
     return chat_service.get_messages_from_private_chat(target_id)
 
 
-@router.get("/chats")
+@router.get(
+    "/chats",
+    response_model=PaginatedResponse[ChatRead],
+    responses={status.HTTP_409_CONFLICT: {"model": DetailMessage}},
+)
 def list_public_chats(
     keyword: str | None = None,
     chat_service: ChatService = Depends(get_chat_service),
-    user_id: int = Depends(get_current_user_id_from_bearer),
     paginator: BasePaginator[ChatRead] = Depends(get_paginator),
 ):
     """List public chats as well as search through them."""
+    chat_service.set_paginator(paginator)
+
+    if keyword:
+        return chat_service.search_public_chats(keyword)
+
+    return chat_service.all()
 
 
 @router.post(

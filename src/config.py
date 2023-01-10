@@ -29,13 +29,6 @@ class Settings(BaseSettings):
 
     secret_key: str
     database_url: str
-
-    postgres_db: str
-    postgres_host: str
-    postgres_port: str = "5432"
-    postgres_user: str
-    postgres_password: str
-
     redis_url: str
 
 

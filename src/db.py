@@ -9,6 +9,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
+import utils
 from config import settings
 
 # PostgreSQL
@@ -22,13 +23,14 @@ broadcast = Broadcast(settings.redis_url)
 
 def ping_sql_database():
     """Pings SQL DB in order to make sure it is running"""
+    params = utils.parse_url(settings.database_url)
     try:
         connection = connect(
-            dbname=settings.postgres_db,
-            user=settings.postgres_user,
-            password=settings.postgres_password,
-            host=settings.postgres_host,
-            port=settings.postgres_port,
+            dbname=params["dbname"],
+            user=params["user"],
+            password=params["password"],
+            host=params["hostname"],
+            port=params["port"],
         )
         connection.close()
     except OperationalError as ext:

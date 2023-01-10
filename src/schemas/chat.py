@@ -1,7 +1,7 @@
 """Chat schemas module."""
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, constr
 
 from schemas.user import UserRead
 
@@ -18,7 +18,7 @@ class BaseChat(BaseModel):
 class ChatCreate(BaseChat):
     """Pydantic validation schema for handling chat model write"""
 
-    name: str
+    name: constr(min_length=2, strip_whitespace=True)
     users: list[int]
 
 

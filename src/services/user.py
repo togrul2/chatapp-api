@@ -153,8 +153,11 @@ class UserService(ListMixin[User], CreateUpdateDeleteService[User]):
         pk,
         schema: (user_schemas.UserPartialUpdate | user_schemas.UserBase),
     ) -> User:
-        # Validate uniqueness of username and email,
-        # if they are not met, these validation methods will raise exceptions
+        """
+        Updates user with given pk
+        Validate uniqueness of username and email,
+        if they are not met, these validation methods will raise exceptions
+        """
         if schema.username:
             self._validate_username_uniqueness(schema.username, pk)
 

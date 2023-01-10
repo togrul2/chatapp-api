@@ -5,14 +5,15 @@ from typing import Any
 from sqlalchemy.orm import defer, joinedload
 
 from exceptions.base import NotFound
+from exceptions.chat import ChatNameTakenHTTPException
 from models.chat import Chat, Membership, Message
 from models.user import User
 from schemas.base import PaginatedResponse
-from schemas.chat import ChatCreate, MessageRead
-from services.base import CreateUpdateDeleteService
+from schemas.chat import ChatCreate, ChatRead, MessageRead
+from services.base import CreateUpdateDeleteService, ListMixin
 
 
-class ChatService(CreateUpdateDeleteService):
+class ChatService(ListMixin, CreateUpdateDeleteService):
     """DB Service for chat model."""
 
     model = Chat
@@ -111,11 +112,43 @@ class ChatService(CreateUpdateDeleteService):
 
     def _validate_not_null_unique_chat_name(
         self, name: str, chat_id: int | None = None
-    ):
+    ) -> None:
         """Validates whether there are chats with the same name as given one.
         Empty names can be duplicated, so they won't count.
-        Also checks whether this name belongs to target chat if it exists."""
-        raise NotImplementedError()
+        Also checks whether this name belongs to target chat if it exists.
+        If some check fails raises http exception"""
+        query = self.session.query(self.model).filter(self.model.name == name)
+
+        if chat_id:
+            query.filter(self.model.id != chat_id)
+
+        if query.first() is not None:
+            raise ChatNameTakenHTTPException
+
+    def all(self) -> PaginatedResponse[ChatRead] | list[ChatRead]:
+        """Returns list of all records."""
+        query = self.session.query(self.model).filter(
+            self.model.private == False  # noqa: E712
+        )
+
+        if self._paginator:
+            return self._paginator.get_paginated_response(query)
+
+        return query.all()
+
+    def search_public_chats(self, keyword: str):
+        """Searches public chat matching the given keyword."""
+        expression = keyword + "%"
+        query = (
+            self.session.query(self.model)
+            .filter(self.model.private == False)  # noqa: E712
+            .filter(self.model.name.like(expression))
+        )
+
+        if self._paginator:
+            return self._paginator.get_paginated_response(query)
+
+        return query.all()
 
     def create_public_chat(self, schema: ChatCreate) -> Chat:
         """Creates chat with membership to a given user."""

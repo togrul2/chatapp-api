@@ -24,21 +24,23 @@ from tests.sql import (
     create_tables,
     drop_tables,
 )
-from utils import SingletonMeta
+from utils import SingletonMeta, parse_url
 
-test_db_name = "test_" + settings.postgres_db
+params = parse_url(settings.database_url)
+db_hostname = params["hostname"]
+db_port = params["port"]
+db_user = params["user"]
+db_password = params["password"]
+db_name = params["dbname"]
+
+test_db_name = "test_" + db_name
 test_db_url = (
-    f"postgresql+psycopg2://"
-    f"{settings.postgres_user}:{settings.postgres_password}"
-    f"@{settings.postgres_host}:{settings.postgres_port}"
-    f"/{test_db_name}"
+    "postgresql+psycopg2://"
+    f"{db_user}:{db_password}@{db_hostname}:{db_port}/{test_db_name}"
 )
 
 dbms_session: DBSQLSession = PostgreSQLSession(
-    settings.postgres_user,
-    settings.postgres_password,
-    settings.postgres_host,
-    settings.postgres_port,
+    db_user, db_password, db_hostname, db_port
 )
 
 
