@@ -5,9 +5,9 @@ from typing import Any, ClassVar, Generic, TypeVar
 
 from sqlalchemy.orm import Session
 
-from exceptions import base as base_exceptions
-from paginator import BasePaginator
-from schemas.base import PaginatedResponse
+from src.exceptions import base as base_exceptions
+from src.paginator import BasePaginator
+from src.schemas.base import PaginatedResponse
 
 T = TypeVar("T")
 

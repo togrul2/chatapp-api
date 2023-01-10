@@ -5,17 +5,17 @@ from functools import partial
 from fastapi import Cookie, Depends, Query, WebSocket
 from sqlalchemy.orm import Session
 
-import config
-from authentication import TokenType, get_user_from_token, oauth2_scheme
-from db import SessionLocal
-from exceptions.chat import WebSocketBadTokenException
-from exceptions.user import HTTPBadTokenException
-from paginator import LimitOffsetPaginator
-from services.base import BaseService
-from services.chat import ChatService
-from services.friendship import FriendshipService
-from services.user import UserService
-from staticfiles import BaseStaticFilesManager, LocalStaticFilesManager
+from src import config
+from src.authentication import TokenType, get_user_from_token, oauth2_scheme
+from src.db import SessionLocal
+from src.exceptions.chat import WebSocketBadTokenException
+from src.exceptions.user import HTTPBadTokenException
+from src.paginator import LimitOffsetPaginator
+from src.services.base import BaseService
+from src.services.chat import ChatService
+from src.services.friendship import FriendshipService
+from src.services.user import UserService
+from src.staticfiles import BaseStaticFilesManager, LocalStaticFilesManager
 
 
 def get_db() -> Generator[Session, None, None]:

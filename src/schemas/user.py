@@ -5,7 +5,7 @@ from urllib import parse
 
 from pydantic import BaseModel, EmailStr, Field, validator
 
-from config import STATIC_DOMAIN
+from src.config import STATIC_DOMAIN
 
 
 class UserBase(BaseModel):

@@ -5,7 +5,7 @@ from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Text
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import object_session, relationship
 
-from models.base import Base, CreateTimestampMixin
+from src.models.base import Base, CreateTimestampMixin
 
 __all__ = ["Membership", "Chat", "Message"]
 

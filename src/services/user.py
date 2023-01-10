@@ -3,13 +3,17 @@ from typing import Any
 
 from fastapi import UploadFile
 
-import authentication
-from exceptions import base as base_exception
-from exceptions import user as user_exceptions
-from models.user import User
-from schemas import user as user_schemas
-from schemas.base import PaginatedResponse
-from services.base import CreateUpdateDeleteService, ListMixin
+from src import authentication
+from src.exceptions.base import NotFound
+from src.exceptions.user import (
+    EmailAlreadyTaken,
+    HTTPBadTokenException,
+    UsernameAlreadyTaken,
+)
+from src.models.user import User
+from src.schemas import user as user_schemas
+from src.schemas.base import PaginatedResponse
+from src.services.base import CreateUpdateDeleteService, ListMixin
 
 
 def get_pfp_path(user_id: int):
@@ -38,7 +42,7 @@ class UserService(ListMixin[User], CreateUpdateDeleteService[User]):
             )
             .first()
         ) is not None:
-            raise user_exceptions.UsernameAlreadyTaken
+            raise UsernameAlreadyTaken
 
     def _validate_email_uniqueness(
         self, email: str, user_id: int | None = None
@@ -49,7 +53,7 @@ class UserService(ListMixin[User], CreateUpdateDeleteService[User]):
             .filter((self.model.email == email) & (self.model.id != user_id))
             .first()
         ) is not None:
-            raise user_exceptions.EmailAlreadyTaken
+            raise EmailAlreadyTaken
 
     def get_by_pk(self, pk: Any) -> Any:
         """Returns ites based on its primary key"""
@@ -65,14 +69,14 @@ class UserService(ListMixin[User], CreateUpdateDeleteService[User]):
         """Returns user with given id or raises 401"""
         user = self._get_by_pk(user_id)
         if user is None:
-            raise user_exceptions.HTTPBadTokenException
+            raise HTTPBadTokenException
         return user
 
     def get_by_username_or_404(self, username: str):
         """Returns user by his username. Raises 404 if not found"""
         user = self._get_by_username(username)
         if user is None:
-            raise base_exception.NotFound
+            raise NotFound
         return user
 
     def create_user(self, schema: user_schemas.UserCreate):
@@ -134,14 +138,14 @@ class UserService(ListMixin[User], CreateUpdateDeleteService[User]):
             not user
             or authentication.verify_password(password, user.password) is False
         ):
-            raise user_exceptions.HTTPBadTokenException
+            raise HTTPBadTokenException
         return user
 
     def refresh_tokens(self, refresh_token: str):
         """Returns new access and refresh tokens if refresh token is valid."""
         user_id = authentication.verify_refresh_token(refresh_token)
         if self._get_by_pk(user_id) is None:
-            raise user_exceptions.HTTPBadTokenException
+            raise HTTPBadTokenException
 
         return {
             "access_token": authentication.create_access_token(user_id),

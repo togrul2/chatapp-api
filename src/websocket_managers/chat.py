@@ -6,10 +6,10 @@ from dataclasses import dataclass
 from broadcaster import Broadcast
 from fastapi import WebSocket
 
-from dependencies import AuthWebSocket
-from schemas.user import UserRead
-from services.chat import ChatService
-from services.user import UserService
+from src.dependencies import AuthWebSocket
+from src.schemas.user import UserRead
+from src.services.chat import ChatService
+from src.services.user import UserService
 
 
 class BasePubSubManager(ABC):

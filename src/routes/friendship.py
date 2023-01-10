@@ -1,16 +1,16 @@
 """Friendship related routes."""
 from fastapi import APIRouter, Depends, status
 
-from dependencies import (
+from src.dependencies import (
     get_current_user_id_from_bearer,
     get_friendship_service,
     get_paginator,
 )
-from paginator import BasePaginator
-from schemas.base import DetailMessage, PaginatedResponse
-from schemas.friendship import FriendshipRead, FriendshipReadWithSender
-from schemas.user import UserRead
-from services.friendship import FriendshipService
+from src.paginator import BasePaginator
+from src.schemas.base import DetailMessage, PaginatedResponse
+from src.schemas.friendship import FriendshipRead, FriendshipReadWithSender
+from src.schemas.user import UserRead
+from src.services.friendship import FriendshipService
 
 router = APIRouter(
     prefix="/api/friendship",

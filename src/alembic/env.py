@@ -4,12 +4,12 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
-from config import settings
-from db import Base
 
 # Models
 from models.chat import Chat, Membership, Message  # noqa: F401
 from models.user import Friendship, User  # noqa: F401
+from src.config import settings
+from src.db import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

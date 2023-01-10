@@ -3,7 +3,7 @@ from typing import cast
 
 from fastapi import status
 
-from models.user import Friendship
+from src.models.user import Friendship
 from tests.conftest import TestDatabase, test_db_url
 
 

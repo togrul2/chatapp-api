@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from schemas.user import UserRead
+from src.schemas.user import UserRead
 
 
 class FriendshipBase(BaseModel):

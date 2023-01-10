@@ -5,17 +5,17 @@ from typing import Any
 from sqlalchemy import Column
 from sqlalchemy.orm import defer, joinedload
 
-from exceptions.base import NotFound
-from exceptions.chat import (
+from src.exceptions.base import NotFound
+from src.exceptions.chat import (
     ChatNameTakenException,
     UserNotAdminException,
     UserNotOwnerException,
 )
-from models.chat import Chat, Membership, Message
-from models.user import User
-from schemas.base import PaginatedResponse
-from schemas.chat import ChatCreate, ChatRead, ChatUpdate, MessageRead
-from services.base import CreateUpdateDeleteService, ListMixin
+from src.models.chat import Chat, Membership, Message
+from src.models.user import User
+from src.schemas.base import PaginatedResponse
+from src.schemas.chat import ChatCreate, ChatRead, ChatUpdate, MessageRead
+from src.services.base import CreateUpdateDeleteService, ListMixin
 
 
 class ChatService(ListMixin, CreateUpdateDeleteService):

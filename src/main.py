@@ -3,11 +3,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from config import BASE_DIR, STATIC_URL
-from db import broadcast, ping_redis_database, ping_sql_database
-from routes.chat import router as chat_router
-from routes.friendship import router as friendship_router
-from routes.user import router as user_router
+from src.config import BASE_DIR, STATIC_URL
+from src.db import broadcast, ping_redis_database, ping_sql_database
+from src.routes.chat import router as chat_router
+from src.routes.friendship import router as friendship_router
+from src.routes.user import router as user_router
 
 app = FastAPI(
     title="Chatapp API",

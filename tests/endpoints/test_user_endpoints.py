@@ -8,13 +8,13 @@ import pytest
 from fastapi import status
 from PIL import Image
 
-from authentication import create_access_token, create_refresh_token
-from exceptions.user import (
+from src.authentication import create_access_token, create_refresh_token
+from src.exceptions.user import (
     EmailAlreadyTaken,
     HTTPBadTokenException,
     UsernameAlreadyTaken,
 )
-from models.user import User
+from src.models.user import User
 from tests.conftest import TEST_STATIC_ROOT, TestDatabase, test_db_url
 
 

@@ -3,7 +3,7 @@ from collections.abc import Sequence
 
 from sqlalchemy import Column, DateTime, Integer, func
 
-import db
+from src import db
 
 
 class Base(db.Base):

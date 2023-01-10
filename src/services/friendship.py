@@ -1,14 +1,14 @@
 """Friendship services module."""
 from sqlalchemy.orm import defer, joinedload
 
-from exceptions import base as base_exceptions
-from exceptions import friendship as friendship_exceptions
-from models.user import Friendship, User
-from schemas.base import PaginatedResponse
-from schemas.friendship import FriendshipReadWithSender
-from schemas.user import UserRead
-from services.base import CreateUpdateDeleteService
-from services.user import UserService
+from src.exceptions.base import NotFound
+from src.exceptions.friendship import RequestAlreadySent, RequestWithYourself
+from src.models.user import Friendship, User
+from src.schemas.base import PaginatedResponse
+from src.schemas.friendship import FriendshipReadWithSender
+from src.schemas.user import UserRead
+from src.services.base import CreateUpdateDeleteService
+from src.services.user import UserService
 
 
 class FriendshipService(CreateUpdateDeleteService[Friendship]):
@@ -99,7 +99,7 @@ class FriendshipService(CreateUpdateDeleteService[Friendship]):
         Raises NotFound if users are not friends.
         """
         if (friendship := self._get_friendship(target_id)) is None:
-            raise base_exceptions.NotFound
+            raise NotFound
         return friendship
 
     def get_friendship_request_with_user_or_404(
@@ -110,16 +110,16 @@ class FriendshipService(CreateUpdateDeleteService[Friendship]):
         Raises NotFound if user hasn't sent request.
         """
         if (friendship := self._get_friendship_request(target_id)) is None:
-            raise base_exceptions.NotFound
+            raise NotFound
         return friendship
 
     def send_to(self, target_id: int) -> Friendship:
         """Send friendship for target user"""
         if target_id == self.user.id:
-            raise friendship_exceptions.RequestWithYourself
+            raise RequestWithYourself
 
         if self._get_friendship(target_id) is not None:
-            raise friendship_exceptions.RequestAlreadySent
+            raise RequestAlreadySent
 
         self.user_service.get_or_404(target_id)
 

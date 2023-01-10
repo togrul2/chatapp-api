@@ -11,20 +11,19 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-import authentication
-from authentication import create_access_token
-from config import BASE_DIR, settings
-from dependencies import get_db, get_staticfiles_manager
-from main import app as fastapi_app
-from models.user import Friendship, User
-from staticfiles import LocalStaticFilesManager
+from src import authentication
+from src.config import BASE_DIR, settings
+from src.dependencies import get_db, get_staticfiles_manager
+from src.main import app as fastapi_app
+from src.models.user import Friendship, User
+from src.staticfiles import LocalStaticFilesManager
+from src.utils import SingletonMeta, parse_url
 from tests.sql import (
     DBSQLSession,
     PostgreSQLSession,
     create_tables,
     drop_tables,
 )
-from utils import SingletonMeta, parse_url
 
 params = parse_url(settings.database_url)
 db_hostname = params["hostname"]
@@ -130,7 +129,7 @@ def client():
 @pytest.fixture()
 def auth_client(user: User):
     """Client of authorized user for testings endpoints."""
-    access_token = create_access_token(user.id)
+    access_token = authentication.create_access_token(user.id)
     yield ClientFactory(
         fastapi_app, headers={"Authorization": f"Bearer {access_token}"}
     )

@@ -2,8 +2,8 @@
 from fastapi import APIRouter, Depends, Form, status
 from fastapi.concurrency import run_until_first_complete
 
-from db import broadcast
-from dependencies import (
+from src.db import broadcast
+from src.dependencies import (
     AuthWebSocket,
     get_auth_websocket,
     get_chat_service,
@@ -11,12 +11,12 @@ from dependencies import (
     get_paginator,
     get_user_service,
 )
-from paginator import BasePaginator
-from schemas.base import DetailMessage, PaginatedResponse
-from schemas.chat import ChatCreate, ChatRead, ChatUpdate, MessageRead
-from services.chat import ChatService
-from services.user import UserService
-from websocket_managers.chat import PrivateMessageManager
+from src.paginator import BasePaginator
+from src.schemas.base import DetailMessage, PaginatedResponse
+from src.schemas.chat import ChatCreate, ChatRead, ChatUpdate, MessageRead
+from src.services.chat import ChatService
+from src.services.user import UserService
+from src.websocket_managers.chat import PrivateMessageManager
 
 router = APIRouter(prefix="/api", tags=["chat"])
 

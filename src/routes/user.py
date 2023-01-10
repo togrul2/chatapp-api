@@ -5,19 +5,18 @@ from urllib import parse
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile, status
 from fastapi.security import OAuth2PasswordRequestForm
 
-import authentication
-import utils
-from dependencies import (
+from src import authentication, utils
+from src.dependencies import (
     get_current_user_id_from_bearer,
     get_paginator,
     get_staticfiles_manager,
     get_user_service,
 )
-from paginator import BasePaginator
-from schemas.base import DetailMessage, PaginatedResponse
-from schemas.user import UserBase, UserCreate, UserPartialUpdate, UserRead
-from services.user import UserService, get_pfp_path
-from staticfiles import BaseStaticFilesManager
+from src.paginator import BasePaginator
+from src.schemas.base import DetailMessage, PaginatedResponse
+from src.schemas.user import UserBase, UserCreate, UserPartialUpdate, UserRead
+from src.services.user import UserService, get_pfp_path
+from src.staticfiles import BaseStaticFilesManager
 
 router = APIRouter(prefix="/api", tags=["user"])
 

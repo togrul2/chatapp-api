@@ -9,7 +9,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 
-from models.base import Base, CreateTimestampMixin
+from src.models.base import Base, CreateTimestampMixin
 
 __all__ = ["Friendship", "User"]
 

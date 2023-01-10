@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from psycopg2 import connect, extensions
 from psycopg2.sql import SQL, Composed, Identifier
 
-from db import Base
+from src.db import Base
 
 
 class DBSQLSession(ABC):

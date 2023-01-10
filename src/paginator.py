@@ -7,7 +7,7 @@ from typing import Generic, TypeVar
 
 from sqlalchemy.orm import Query
 
-from schemas.base import PaginatedResponse
+from src.schemas.base import PaginatedResponse
 
 T = TypeVar("T", int, str)
 
