@@ -11,6 +11,11 @@ EmailAlreadyTaken = HTTPException(
     detail="User with given email already exists.",
 )
 
+BadCredentialsException = HTTPException(
+    status_code=status.HTTP_401_UNAUTHORIZED,
+    detail="Invalid username or password.",
+    headers={"WWW-Authenticate": "Bearer"},
+)
 
 HTTPBadTokenException = HTTPException(
     status_code=status.HTTP_401_UNAUTHORIZED,

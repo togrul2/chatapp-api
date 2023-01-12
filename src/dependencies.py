@@ -3,11 +3,11 @@ from collections.abc import Callable, Generator
 from functools import partial
 
 from fastapi import Cookie, Depends, Query, WebSocket
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import config
 from src.authentication import TokenType, get_user_from_token, oauth2_scheme
-from src.db import SessionLocal
+from src.db import async_session
 from src.exceptions.chat import WebSocketBadTokenException
 from src.exceptions.user import HTTPBadTokenException
 from src.paginator import LimitOffsetPaginator
@@ -18,13 +18,13 @@ from src.services.user import UserService
 from src.staticfiles import BaseStaticFilesManager, LocalStaticFilesManager
 
 
-def get_db() -> Generator[Session, None, None]:
+async def get_db() -> Generator[AsyncSession, None, None]:
     """Returns db session for FastAPI dependency injection."""
-    db_session = SessionLocal()
+    db_session = async_session()
     try:
         yield db_session
     finally:
-        db_session.close()
+        await db_session.close()
 
 
 def get_staticfiles_manager() -> BaseStaticFilesManager:
@@ -59,14 +59,15 @@ def get_current_user_id_from_cookie(access_token: str = Cookie()) -> int:
 def get_paginator(
     page: int = Query(default=1),
     page_size: int = Query(default=config.PAGE_SIZE_DEFAULT),
+    db_session: AsyncSession = Depends(get_db),
 ):
     """Returns pagination with page and page size query params."""
-    return LimitOffsetPaginator(page, page_size)
+    return LimitOffsetPaginator(page, page_size, db_session)
 
 
 def get_service(
-    service: Callable[[Session], BaseService],
-    db_session: Session = Depends(get_db),
+    service: Callable[[AsyncSession], BaseService],
+    db_session: AsyncSession = Depends(get_db),
 ) -> Generator[BaseService, None, None]:
     """
     Base function for creating service dependency

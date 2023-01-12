@@ -3,7 +3,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, ClassVar, Generic, TypeVar
 
-from sqlalchemy.orm import Session
+from sqlalchemy import delete, inspect, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.exceptions import base as base_exceptions
 from src.paginator import BasePaginator
@@ -25,20 +26,22 @@ class BaseService(Generic[T]):
     """
 
     model: ClassVar[T]
-    session: Session
+    session: AsyncSession
     _paginator: BasePaginator | None = None
 
-    def _get_by_pk(self, pk: Any) -> Any:
+    async def _get_by_pk(self, pk: Any) -> Any:
         """Returns item with matching pk, or None if item is not found."""
-        return self.session.query(self.model).get(pk)
+        query = select(inspect(self.model).c).where(self.model.id == pk)
+        result = await self.session.execute(query)
+        return result.fetchone()
 
     def set_paginator(self, paginator: BasePaginator):
         """Set paginator for service"""
         self._paginator = paginator
 
-    def get_or_404(self, pk: Any) -> Any:
+    async def get_or_404(self, pk: Any) -> Any:
         """Returns item with matching pk. If nothing found raises NotFound."""
-        item = self._get_by_pk(pk)
+        item = await self._get_by_pk(pk)
         if item is None:
             raise base_exceptions.NotFound
         return item
@@ -47,51 +50,53 @@ class BaseService(Generic[T]):
 class ListMixin(BaseService[T]):
     """Mixin class for all() operation."""
 
-    def all(self) -> PaginatedResponse[T] | list[T]:
+    async def all(self) -> PaginatedResponse[T] | list[T]:
         """Returns list of all records."""
-        query = self.session.query(self.model)
-
+        query = select(inspect(self.model).c)
         if self._paginator:
-            return self._paginator.get_paginated_response(query)
+            result = await self._paginator.get_paginated_response(query)
+            return result
 
-        return query.all()
+        result = await self.session.execute(query)
+        return result.fetchall()
 
 
 class CreateServiceMixin(BaseService[T]):
     """Mixin class for create() operation."""
 
-    def create(self, schema: dict[str, Any]) -> T:
+    async def create(self, schema: dict[str, Any]) -> T:
         """Creates and returns item."""
         item = self.model(**schema)
         self.session.add(item)
-        self.session.commit()
+        await self.session.commit()
         return item
 
 
 class UpdateServiceMixin(BaseService[T]):
     """Mixin with update() operation."""
 
-    def update(self, pk, schema: Mapping[str, Any]) -> T:
+    async def update(self, pk: Any, schema: Mapping[str, Any]) -> T:
         """Updates and returns updated item."""
-        item = self.get_or_404(pk)
-
-        for field, value in schema.items():
-            if value is not None:
-                setattr(item, field, value)
-
-        self.session.commit()
-        self.session.refresh(item)
-        return item
+        filtered_schema = {k: v for k, v in schema.items() if v is not None}
+        query = (
+            update(self.model)
+            .where(self.model.id == pk)
+            .values(**filtered_schema)
+        )
+        await self.session.execute(query)
+        await self.session.commit()
+        return await self.get_or_404(pk)
 
 
 class DeleteServiceMixin(BaseService[T]):
     """Mixin with delete() operation."""
 
-    def delete(self, pk: Any) -> None:
+    async def delete(self, pk: Any) -> None:
         """Deletes item with given pk."""
-        item = self.get_or_404(pk)
-        self.session.delete(item)
-        self.session.commit()
+        item = await self.get_or_404(pk)
+        query = delete(self.model).where(self.model.id == item.id)
+        await self.session.execute(query)
+        await self.session.commit()
 
 
 class CreateUpdateDeleteService(

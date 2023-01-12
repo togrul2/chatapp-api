@@ -27,7 +27,7 @@ router = APIRouter(prefix="/api", tags=["user"])
     responses={status.HTTP_401_UNAUTHORIZED: {"model": DetailMessage}},
 )
 async def token(
-    user_service: UserService = Depends(get_user_service),
+    service: UserService = Depends(get_user_service),
     credentials: OAuth2PasswordRequestForm = Depends(),
 ):
     """
@@ -36,9 +36,9 @@ async def token(
     - **password**: password of a user.
     \f
     :param credentials: User's credentials.
-    :param user_service: service providing user model operations.
+    :param service: service providing user model operations.
     """
-    user = user_service.authenticate_user(
+    user = await service.authenticate_user(
         credentials.username, credentials.password
     )
 
@@ -55,22 +55,22 @@ async def token(
 )
 async def refresh(
     refresh_token: str = Form(),
-    user_service: UserService = Depends(get_user_service),
+    service: UserService = Depends(get_user_service),
 ):
     """
     Creates access & refresh tokens based on refresh token.
     - **refresh_token**: refresh token
     \f
     :param refresh_token: refresh token of a user.
-    :param user_service: service providing user model operations.
+    :param service: service providing user model operations.
     """
-    return user_service.refresh_tokens(refresh_token)
+    return await service.refresh_tokens(refresh_token)
 
 
 @router.get("/users", response_model=PaginatedResponse[UserRead])
-def list_users(
+async def list_users(
     keyword: str | None = None,
-    user_service: UserService = Depends(get_user_service),
+    service: UserService = Depends(get_user_service),
     paginator: BasePaginator[UserRead] = Depends(get_paginator),
 ):
     """
@@ -78,19 +78,15 @@ def list_users(
     which will be compared to users' username and email.
     - **keyword**: keyword url parameter which will be
         used to find users with matching username or email.
-    \f
-    :param keyword: query param for user search.
-    :param user_service: service providing user model operations.
-    :return: List of searched users.
     """
     # If we have a present keyword, we would filter result,
     # otherwise send all data.
-    user_service.set_paginator(paginator)
+    service.set_paginator(paginator)
 
     if keyword:
-        return user_service.search(keyword)
+        return await service.search(keyword)
 
-    return user_service.all()
+    return await service.all()
 
 
 @router.post(
@@ -99,7 +95,7 @@ def list_users(
     response_model=UserRead,
     responses={status.HTTP_400_BAD_REQUEST: {"model": DetailMessage}},
 )
-def create_user(
+async def create_user(
     data: UserCreate, user_service: UserService = Depends(get_user_service)
 ):
     """
@@ -113,11 +109,11 @@ def create_user(
     :param data: User input.
     :param user_service: service providing user model operations.
     """
-    return user_service.create_user(data)
+    return await user_service.create_user(data)
 
 
 @router.get("/users/me", response_model=UserRead)
-def get_auth_user(
+async def get_auth_user(
     user_id: int = Depends(get_current_user_id_from_bearer),
     user_service: UserService = Depends(get_user_service),
 ):
@@ -128,7 +124,7 @@ def get_auth_user(
     :param user_service: service providing user model operations.
     :return: Auth user's data.
     """
-    return user_service.get_or_404(user_id)
+    return await user_service.get_or_404(user_id)
 
 
 @router.put(
@@ -136,7 +132,7 @@ def get_auth_user(
     response_model=UserRead,
     responses={status.HTTP_400_BAD_REQUEST: {"model": DetailMessage}},
 )
-def update_auth_user(
+async def update_auth_user(
     data: UserBase,
     user_id: int = Depends(get_current_user_id_from_bearer),
     user_service: UserService = Depends(get_user_service),
@@ -154,7 +150,7 @@ def update_auth_user(
     :return: Updated user data
     """
 
-    return user_service.update_user(user_id, data)
+    return await user_service.update_user(user_id, data)
 
 
 @router.patch(
@@ -162,7 +158,7 @@ def update_auth_user(
     response_model=UserRead,
     responses={status.HTTP_400_BAD_REQUEST: {"model": DetailMessage}},
 )
-def partial_update_auth_user(
+async def partial_update_auth_user(
     data: UserPartialUpdate,
     user_id: int = Depends(get_current_user_id_from_bearer),
     user_service: UserService = Depends(get_user_service),
@@ -179,11 +175,11 @@ def partial_update_auth_user(
     :param user_service: service providing user model operations.
     :return: Updated user data
     """
-    return user_service.update_user(user_id, data)
+    return await user_service.update_user(user_id, data)
 
 
 @router.post("/users/me/image", response_model=UserRead)
-def upload_profile_picture(
+async def upload_profile_picture(
     profile_picture: UploadFile,
     user_id: int = Depends(get_current_user_id_from_bearer),
     user_service: UserService = Depends(get_user_service),
@@ -221,11 +217,11 @@ def upload_profile_picture(
         parse.urljoin(path, profile_picture.filename)
     )
 
-    return user_service.update_profile_picture(user_id, url)
+    return await user_service.update_profile_picture(user_id, url)
 
 
 @router.delete("/users/me/image", status_code=status.HTTP_204_NO_CONTENT)
-def remove_profile_picture(
+async def remove_profile_picture(
     user_id: int = Depends(get_current_user_id_from_bearer),
     user_service: UserService = Depends(get_user_service),
 ):
@@ -235,11 +231,11 @@ def remove_profile_picture(
     :param user_id: id of an authenticated user.
     :param user_service: service providing user model operations.
     """
-    user_service.remove_profile_picture(user_id)
+    await user_service.remove_profile_picture(user_id)
 
 
 @router.delete("/users/me", status_code=status.HTTP_204_NO_CONTENT)
-def delete_auth_user(
+async def delete_auth_user(
     user_id: int = Depends(get_current_user_id_from_bearer),
     user_service: UserService = Depends(get_user_service),
 ):
@@ -250,7 +246,7 @@ def delete_auth_user(
     :param user_id: id of authenticated user
     :param user_service: service providing user model operations.
     """
-    user_service.delete(user_id)
+    await user_service.delete(user_id)
 
 
 @router.get(
@@ -258,7 +254,7 @@ def delete_auth_user(
     response_model=UserRead,
     responses={status.HTTP_404_NOT_FOUND: {"model": DetailMessage}},
 )
-def get_user_by_id(
+async def get_user_by_id(
     user_id: int, user_service: UserService = Depends(get_user_service)
 ):
     """
@@ -269,7 +265,7 @@ def get_user_by_id(
     :param user_service: service providing user model operations.
     :return: user with given id.
     """
-    return user_service.get_or_404(user_id)
+    return await user_service.get_or_404(user_id)
 
 
 @router.get(
@@ -277,7 +273,7 @@ def get_user_by_id(
     response_model=UserRead,
     responses={status.HTTP_404_NOT_FOUND: {"model": DetailMessage}},
 )
-def get_user_by_username(
+async def get_user_by_username(
     username: str, user_service: UserService = Depends(get_user_service)
 ):
     """
@@ -288,4 +284,4 @@ def get_user_by_username(
     :param user_service: service providing user model operations.
     :return: user with given id.
     """
-    return user_service.get_by_username_or_404(username)
+    return await user_service.get_by_username_or_404(username)
