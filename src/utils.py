@@ -1,35 +1,18 @@
 """Miscellaneous utils for project."""
 import re
+from collections.abc import Sequence
 from urllib import parse
 
 
-def split_path(path: str) -> list[str]:
+def split_path(path: str) -> Sequence[str]:
     """Splits path by `/` or `\\`. Basically universal
     full path splitter for both windows and unix like systems.
-
-    Example:
-        >>> split_path('C:\\Windows\\Temp\\some_file.txt')
-        ['C:', 'Windows', 'Temp', 'some_file.txt']
-
-        >>> split_path('/tmp/some_file.txt')
-        ['tmp', 'some_file.txt']
     """
-    return list(filter(None, re.split("[/\\\\]", path)))
+    return tuple(filter(None, re.split("[/\\\\]", path)))
 
 
 def split_filename(file: str) -> tuple[str, str]:
-    """Splits filename into name and extension part.
-
-    Example:
-        >>> split_filename("hello.py")
-        ('hello', 'py')
-
-        >>> split_filename("hello.world.py")
-        ('hello.world', 'py')
-
-        >>> split_filename(".gitignore")
-        ('.gitignore', '.')
-    """
+    """Splits filename into name and extension part."""
     filename, ext = file.rsplit(".", 1)
 
     if not (filename and ext):
@@ -39,14 +22,7 @@ def split_filename(file: str) -> tuple[str, str]:
 
 
 def parse_url(url: str) -> dict[str, str]:
-    """Parses url and returns parameters from it.
-
-    Example:
-        >>> URL = 'postgresql+psycopg2://someuser:somepassword@localhost:5432/somedb'  # noqa
-        >>> parse_url(URL)
-        {'hostname': 'localhost', 'port': 5432, 'user': 'someuser', 'password': 'somepassword', 'dbname': 'somedb'}
-
-    """
+    """Parses url and returns parameters from it."""
 
     params = parse.urlparse(url)
     return {

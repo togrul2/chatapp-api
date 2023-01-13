@@ -8,6 +8,7 @@ from typing import Generic, TypeVar
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import CompoundSelect
 from sqlalchemy.sql.expression import Select
 
 from src.schemas.base import PaginatedResponse
@@ -33,16 +34,14 @@ class BasePaginator(ABC, Generic[T]):
         """Returns pydantic response model for paginated queries."""
         result = await self.session.execute(query)
         return PaginatedResponse.construct(
-            results=result.fetchall(),
+            results=result.scalars().all(),
             total_pages=self.total_pages,
             total_records=self.total_count,
             current_page=self.page,
             items_per_page=self.page_size,
         )
 
-    async def get_paginated_response(
-        self, query: Select
-    ) -> PaginatedResponse[T]:
+    async def get_paginated_response(self, query: Select | CompoundSelect):
         """Returns pydantic response with pagination applied."""
         query = await self.paginate(query)
         response = await self._response(query)

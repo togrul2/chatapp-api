@@ -1,9 +1,8 @@
 from abc import ABC, abstractmethod
+from collections.abc import Coroutine, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from typing import Any
-
-from collections.abc import Coroutine, Sequence
 
 from asyncpg import connect
 from sqlalchemy.ext.asyncio import AsyncEngine

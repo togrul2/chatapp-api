@@ -9,7 +9,7 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import AsyncClient
-from sqlalchemy import delete
+from sqlalchemy import delete, update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -108,6 +108,14 @@ def client(test_app: FastAPI):
 
 
 @pytest_asyncio.fixture()
+async def auth_client(user: User, client: AsyncClient):
+    """Client of authorized user for testings endpoints."""
+    access_token = authentication.create_access_token(user.id)
+    client.headers = {"Authorization": f"Bearer {access_token}"}
+    yield client
+
+
+@pytest_asyncio.fixture()
 async def user(session: AsyncSession):
     """Fixture for generating user"""
     password = authentication.get_hashed_password("Testpassword")
@@ -124,14 +132,6 @@ async def user(session: AsyncSession):
     yield user_model
     await session.execute(delete(User).where(User.id == target_id))
     await session.commit()
-
-
-@pytest_asyncio.fixture()
-async def auth_client(user: User, client: AsyncClient):
-    """Client of authorized user for testings endpoints."""
-    access_token = authentication.create_access_token(user.id)
-    client.headers = {"Authorization": f"Bearer {access_token}"}
-    yield client
 
 
 @pytest_asyncio.fixture()
@@ -155,7 +155,7 @@ async def sender_user(session: AsyncSession):
 
 @pytest_asyncio.fixture()
 async def friendship_request(user: User, sender_user: User, session):
-    """Friendship model factory."""
+    """Friendship request model fixture."""
 
     friendship_model = Friendship(
         receiver_id=user.id, sender_id=sender_user.id
@@ -166,3 +166,16 @@ async def friendship_request(user: User, sender_user: User, session):
     yield friendship_model
     await session.execute(delete(Friendship).where(Friendship.id == target_id))
     await session.commit()
+
+
+@pytest_asyncio.fixture()
+async def friendship(session: AsyncSession, friendship_request: Friendship):
+    """Friendship fixture between user and sender_user."""
+    query = (
+        update(Friendship)
+        .where(Friendship.id == friendship_request.id)
+        .values(accepted=True)
+    )
+    await session.execute(query)
+    await session.commit()
+    yield friendship_request

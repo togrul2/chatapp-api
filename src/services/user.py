@@ -2,7 +2,7 @@
 from typing import Any
 
 from fastapi import UploadFile
-from sqlalchemy import inspect, select, update
+from sqlalchemy import select, update
 from sqlalchemy.sql import Select
 
 from src import authentication
@@ -41,7 +41,7 @@ class UserService(ListMixin[User], CreateUpdateDeleteService[User]):
                 (self.model.username == username) & (self.model.id != user_id)
             )
         )
-        if result.fetchone() is not None:
+        if result.first() is not None:
             raise UsernameAlreadyTaken
 
     async def _validate_email_uniqueness(
@@ -53,7 +53,7 @@ class UserService(ListMixin[User], CreateUpdateDeleteService[User]):
                 (self.model.email == email) & (self.model.id != user_id)
             )
         )
-        if result.fetchone() is not None:
+        if result.first() is not None:
             raise EmailAlreadyTaken
 
     async def get_by_pk(self, pk: Any) -> Any:
@@ -62,11 +62,9 @@ class UserService(ListMixin[User], CreateUpdateDeleteService[User]):
 
     async def _get_by_username(self, username: str):
         """Returns user with matching username"""
-        query = select(inspect(self.model).c).where(
-            self.model.username == username
-        )
+        query = select(self.model).where(self.model.username == username)
         result = await self.session.execute(query)
-        return result.fetchone()
+        return result.scalar()
 
     async def get_or_401(self, user_id: int):
         """Returns user with given id. If not found, raises 401."""
@@ -95,7 +93,7 @@ class UserService(ListMixin[User], CreateUpdateDeleteService[User]):
         self, username: str, email: str
     ) -> Select:
         """Returns query with users by matching username or email."""
-        return select(inspect(self.model).c).where(
+        return select(self.model).where(
             self.model.username.like(username) | (self.model.email.like(email))
         )
 
@@ -109,7 +107,8 @@ class UserService(ListMixin[User], CreateUpdateDeleteService[User]):
         if self._paginator:
             return await self._paginator.get_paginated_response(query)
 
-        return (await self.session.execute(query)).fetchall()
+        result = await self.session.execute(query)
+        return result.scalars().all()
 
     async def update_profile_picture(
         self, user_id: int, image_url: str
@@ -167,7 +166,7 @@ class UserService(ListMixin[User], CreateUpdateDeleteService[User]):
 
     async def update_user(
         self,
-        pk,
+        pk: int,
         schema: (user_schemas.UserPartialUpdate | user_schemas.UserBase),
     ) -> User:
         """

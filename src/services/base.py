@@ -3,7 +3,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, ClassVar, Generic, TypeVar
 
-from sqlalchemy import delete, inspect, select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.exceptions import base as base_exceptions
@@ -25,15 +25,15 @@ class BaseService(Generic[T]):
 
     """
 
-    model: ClassVar[T]
+    model: ClassVar[Any]
     session: AsyncSession
     _paginator: BasePaginator | None = None
 
     async def _get_by_pk(self, pk: Any) -> Any:
         """Returns item with matching pk, or None if item is not found."""
-        query = select(inspect(self.model).c).where(self.model.id == pk)
+        query = select(self.model).where(self.model.id == pk)
         result = await self.session.execute(query)
-        return result.fetchone()
+        return result.scalar()
 
     def set_paginator(self, paginator: BasePaginator):
         """Set paginator for service"""
@@ -52,13 +52,13 @@ class ListMixin(BaseService[T]):
 
     async def all(self) -> PaginatedResponse[T] | list[T]:
         """Returns list of all records."""
-        query = select(inspect(self.model).c)
+        query = select(self.model)
         if self._paginator:
             result = await self._paginator.get_paginated_response(query)
             return result
 
         result = await self.session.execute(query)
-        return result.fetchall()
+        return result.scalars().all()
 
 
 class CreateServiceMixin(BaseService[T]):
@@ -69,6 +69,7 @@ class CreateServiceMixin(BaseService[T]):
         item = self.model(**schema)
         self.session.add(item)
         await self.session.commit()
+        await self.session.refresh(item)
         return item
 
 
@@ -78,6 +79,7 @@ class UpdateServiceMixin(BaseService[T]):
     async def update(self, pk: Any, schema: Mapping[str, Any]) -> T:
         """Updates and returns updated item."""
         filtered_schema = {k: v for k, v in schema.items() if v is not None}
+        item = await self.get_or_404(pk)
         query = (
             update(self.model)
             .where(self.model.id == pk)
@@ -85,7 +87,8 @@ class UpdateServiceMixin(BaseService[T]):
         )
         await self.session.execute(query)
         await self.session.commit()
-        return await self.get_or_404(pk)
+        await self.session.refresh(item)
+        return item
 
 
 class DeleteServiceMixin(BaseService[T]):

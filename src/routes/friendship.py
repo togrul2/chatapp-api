@@ -20,7 +20,8 @@ router = APIRouter(
 
 
 @router.get(
-    "/requests", response_model=PaginatedResponse[FriendshipReadWithSender]
+    "/requests",
+    # response_model=PaginatedResponse[FriendshipReadWithSender]
 )
 async def get_pending_requests(
     user_id: int = Depends(get_current_user_id_from_bearer),
@@ -30,9 +31,9 @@ async def get_pending_requests(
     ),
 ):
     """Returns list of user's friendship requests pending for response."""
-    service.set_user(user_id)
+    await service.set_user(user_id)
     service.set_paginator(paginator)
-    return service.list_pending_friendships()
+    return await service.list_pending_friendships()
 
 
 @router.get(
@@ -46,8 +47,8 @@ async def get_request(
     user_id: int = Depends(get_current_user_id_from_bearer),
 ):
     """Returns friendship with given user."""
-    service.set_user(user_id)
-    return service.get_friendship_with_user_or_404(target_id)
+    await service.set_user(user_id)
+    return await service.get_friendship_with_user_or_404(target_id)
 
 
 @router.post(
@@ -65,8 +66,8 @@ async def send_request(
     Sends friendship request to the target user.
     - **target_id**: user id who receives the request.
     """
-    service.set_user(user_id)
-    return service.send_to(target_id)
+    await service.set_user(user_id)
+    return await service.send_to(target_id)
 
 
 @router.patch(
@@ -83,8 +84,8 @@ async def accept_request(
     Accepts frienship request from target.
     Returns 404 if there is no request from target user.
     """
-    service.set_user(user_id)
-    return service.approve(target_id)
+    await service.set_user(user_id)
+    return await service.approve(target_id)
 
 
 @router.delete(
@@ -98,8 +99,8 @@ async def delete_friendship(
     user_id: int = Depends(get_current_user_id_from_bearer),
 ):
     """Deletes friendship with given user if it exists."""
-    service.set_user(user_id)
-    service.decline(target_id)
+    await service.set_user(user_id)
+    await service.decline(target_id)
 
 
 @router.get("/friends", response_model=PaginatedResponse[UserRead])
@@ -109,6 +110,6 @@ async def get_friends(
     paginator: BasePaginator[UserRead] = Depends(get_paginator),
 ):
     """Returns list of friends."""
-    service.set_user(user_id)
+    await service.set_user(user_id)
     service.set_paginator(paginator)
-    return service.list_friends()
+    return await service.list_friends()
