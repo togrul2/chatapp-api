@@ -68,9 +68,9 @@ class UserService(ListMixin[User], CreateUpdateDeleteService[User]):
         result = await self.session.execute(query)
         return result.fetchone()
 
-    def get_or_401(self, user_id: int):
-        """Returns user with given id or raises 401"""
-        user = self._get_by_pk(user_id)
+    async def get_or_401(self, user_id: int):
+        """Returns user with given id. If not found, raises 401."""
+        user = await self._get_by_pk(user_id)
         if user is None:
             raise HTTPBadTokenException
         return user
@@ -95,10 +95,6 @@ class UserService(ListMixin[User], CreateUpdateDeleteService[User]):
         self, username: str, email: str
     ) -> Select:
         """Returns query with users by matching username or email."""
-        # return self.session.query(self.model).filter(
-        #     (self.model.username.like(username))
-        #     | (self.model.email.like(email))
-        # )
         return select(inspect(self.model).c).where(
             self.model.username.like(username) | (self.model.email.like(email))
         )

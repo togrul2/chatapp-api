@@ -1,26 +1,26 @@
 """
 Config and fixtures for tests.
 """
+import asyncio
+import os
 import shutil
-from collections.abc import Mapping
-from typing import Any
 
 import pytest
+import pytest_asyncio
 from fastapi import FastAPI
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from httpx import AsyncClient
+from sqlalchemy import delete
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 from src import authentication
 from src.config import BASE_DIR, settings
-from src.dependencies import get_db, get_staticfiles_manager
-from src.main import app as fastapi_app
 from src.models.user import Friendship, User
 from src.staticfiles import LocalStaticFilesManager
-from src.utils import SingletonMeta, parse_url
-from tests.sql import (
-    DBSQLSession,
-    PostgreSQLSession,
+from src.utils import parse_url
+from tests.async_sql import (
+    DBSQLAsyncSession,
+    PostgreSQLAsyncSession,
     create_tables,
     drop_tables,
 )
@@ -34,139 +34,135 @@ db_name = params["dbname"]
 
 test_db_name = "test_" + db_name
 test_db_url = (
-    "postgresql+psycopg2://"
+    "postgresql+asyncpg://"
     f"{db_user}:{db_password}@{db_hostname}:{db_port}/{test_db_name}"
 )
 
-dbms_session: DBSQLSession = PostgreSQLSession(
+dbms_session: DBSQLAsyncSession = PostgreSQLAsyncSession(
     db_user, db_password, db_hostname, db_port
 )
 
 
-class TestDatabase(metaclass=SingletonMeta):
-    """Singleton class provides test database engine and sessionmaker."""
-
-    def __init__(self, db_url: str):
-        self.test_engine = create_engine(url=db_url)
-        self.session_maker = sessionmaker(bind=self.test_engine)
-
-
-def _get_test_db():
-    db_session = TestDatabase(test_db_url).session_maker()
-    try:
-        yield db_session
-    finally:
-        db_session.close()
+test_engine = create_async_engine(url=test_db_url)
+async_session = sessionmaker(
+    test_engine, autocommit=False, expire_on_commit=False, class_=AsyncSession
+)
 
 
 TEST_STATIC_ROOT = BASE_DIR / "test_static"
 
 
-def _get_test_staticfiles_manager():
-    return LocalStaticFilesManager(
-        "http://localhost:8000", "/static/", TEST_STATIC_ROOT
-    )
+@pytest.fixture(scope="session", autouse=True)
+def event_loop():
+    loop = asyncio.get_event_loop()
+    yield loop
+    loop.close()
 
 
-class ClientFactory:
-    """Client factory class."""
+@pytest_asyncio.fixture(scope="session", autouse=True)
+async def setup_teardown():
+    await dbms_session.create_database(test_db_name)
+    await create_tables(test_engine)
+    os.mkdir(TEST_STATIC_ROOT)
+    yield
+    await drop_tables(test_engine)
+    await dbms_session.drop_database(test_db_name)
+    shutil.rmtree(TEST_STATIC_ROOT)
 
-    def __new__(cls, app: FastAPI, headers: Mapping[str, Any], **kwargs):
-        _client = TestClient(app, **kwargs)
-        _client.headers = headers  # type: ignore
-        return _client
+
+@pytest_asyncio.fixture(scope="session")
+async def session():
+    async with async_session() as db_session:
+        yield db_session
 
 
-def pytest_configure(config):  # noqa
-    """
-    Allows plugins and conftest files to perform initial configuration.
-    This hook is called for every plugin and initial conftest
-    file after command line options have been parsed.
-    """
-    dbms_session.create_database(test_db_name)
-    create_tables(TestDatabase(test_db_url).test_engine)
+@pytest_asyncio.fixture(scope="session")
+async def test_app(session: AsyncSession):
+    """Test FastAPI app for processing requests.
+    Uses testing database and staticfiles manager."""
+    from src.dependencies import get_db, get_staticfiles_manager
+    from src.main import app as fastapi_app
+
+    def _get_test_db():
+        """Testing dependency for getting db session."""
+        yield session
+
+    def _get_test_staticfiles_manager():
+        """Testing dependency for staticfiles manager."""
+        return LocalStaticFilesManager(
+            "http://localhost:8000", "/static/", TEST_STATIC_ROOT
+        )
 
     fastapi_app.dependency_overrides[get_db] = _get_test_db
     fastapi_app.dependency_overrides[
         get_staticfiles_manager
     ] = _get_test_staticfiles_manager
 
-
-def pytest_unconfigure(config):  # noqa
-    """Called before test process is exited."""
-    drop_tables(TestDatabase(test_db_url).test_engine)
-    dbms_session.drop_database(test_db_name)
-    shutil.rmtree(TEST_STATIC_ROOT)
+    yield fastapi_app
 
 
-@pytest.fixture()
-def user():
-    """Fixture for generating user"""
-    with TestDatabase(test_db_url).session_maker() as session:
-        password = authentication.get_hashed_password("Testpassword")
-        user_model = User(
-            username="johndoe",
-            email="johndoe@example.com",
-            first_name="John",
-            last_name="Doe",
-            password=password,
-        )
-        session.add(user_model)
-        session.commit()
-        target_id = user_model.id
-        yield user_model
-
-        session.query(User).filter(User.id == target_id).delete()
-        session.commit()
-
-
-@pytest.fixture()
-def client():
+@pytest.fixture(scope="session")
+def client(test_app: FastAPI):
     """Client for testings endpoints."""
-    yield ClientFactory(fastapi_app, {})
+    yield AsyncClient(app=test_app, base_url="http://test")
 
 
-@pytest.fixture()
-def auth_client(user: User):
+@pytest_asyncio.fixture()
+async def user(session: AsyncSession):
+    """Fixture for generating user"""
+    password = authentication.get_hashed_password("Testpassword")
+    user_model = User(
+        username="johndoe",
+        email="johndoe@example.com",
+        first_name="John",
+        last_name="Doe",
+        password=password,
+    )
+    session.add(user_model)
+    await session.commit()
+    target_id = user_model.id
+    yield user_model
+    await session.execute(delete(User).where(User.id == target_id))
+    await session.commit()
+
+
+@pytest_asyncio.fixture()
+async def auth_client(user: User, client: AsyncClient):
     """Client of authorized user for testings endpoints."""
     access_token = authentication.create_access_token(user.id)
-    yield ClientFactory(
-        fastapi_app, headers={"Authorization": f"Bearer {access_token}"}
-    )
+    client.headers = {"Authorization": f"Bearer {access_token}"}
+    yield client
 
 
-@pytest.fixture()
-def sender_user():
+@pytest_asyncio.fixture()
+async def sender_user(session: AsyncSession):
     """User for sending friendship request to another one."""
-    with TestDatabase(test_db_url).session_maker() as session:
-        password = authentication.get_hashed_password("Testpassword")
-        user_model = User(
-            username="peterdoe",
-            email="peterdoe@example.com",
-            first_name="Peter",
-            last_name="Doe",
-            password=password,
-        )
-        session.add(user_model)
-        session.commit()
-        target_id = user_model.id
-        yield user_model
-
-        session.query(User).filter(User.id == target_id).delete()
-        session.commit()
+    password = authentication.get_hashed_password("Testpassword")
+    user_model = User(
+        username="peterdoe",
+        email="peterdoe@example.com",
+        first_name="Peter",
+        last_name="Doe",
+        password=password,
+    )
+    session.add(user_model)
+    await session.commit()
+    target_id = user_model.id
+    yield user_model
+    await session.execute(delete(User).where(User.id == target_id))
+    await session.commit()
 
 
-@pytest.fixture()
-def friendship_request(user: User, sender_user: User):
+@pytest_asyncio.fixture()
+async def friendship_request(user: User, sender_user: User, session):
     """Friendship model factory."""
-    with TestDatabase(test_db_url).session_maker() as session:
-        friendship_model = Friendship(
-            receiver_id=user.id, sender_id=sender_user.id
-        )
-        session.add(friendship_model)
-        session.commit()
-        target_id = friendship_model.id
-        yield friendship_model
 
-        session.query(Friendship).filter(Friendship.id == target_id).delete()
-        session.commit()
+    friendship_model = Friendship(
+        receiver_id=user.id, sender_id=sender_user.id
+    )
+    session.add(friendship_model)
+    await session.commit()
+    target_id = friendship_model.id
+    yield friendship_model
+    await session.execute(delete(Friendship).where(Friendship.id == target_id))
+    await session.commit()

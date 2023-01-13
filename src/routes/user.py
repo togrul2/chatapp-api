@@ -112,19 +112,23 @@ async def create_user(
     return await user_service.create_user(data)
 
 
-@router.get("/users/me", response_model=UserRead)
+@router.get(
+    "/users/me",
+    response_model=UserRead,
+    responses={status.HTTP_401_UNAUTHORIZED: {"model": DetailMessage}},
+)
 async def get_auth_user(
     user_id: int = Depends(get_current_user_id_from_bearer),
-    user_service: UserService = Depends(get_user_service),
+    service: UserService = Depends(get_user_service),
 ):
     """
     Returns authenticated user's data or returns 401 if unauthenticated.
     \f
     :param user_id: id of authenticated user.
-    :param user_service: service providing user model operations.
+    :param service: service providing user model operations.
     :return: Auth user's data.
     """
-    return await user_service.get_or_404(user_id)
+    return await service.get_or_401(user_id)
 
 
 @router.put(
