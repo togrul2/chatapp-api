@@ -1,9 +1,14 @@
-"""User services module."""
-from typing import Any
+"""
+User services module.
+Contains functions and coroutines for
+performing business logic related to user and authentication.
+"""
+import os
+from typing import TypedDict, cast
 
 from fastapi import UploadFile
-from sqlalchemy import select, update
-from sqlalchemy.sql import Select
+from sqlalchemy import Column, delete, exists, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import authentication
 from src.exceptions.base import NotFound
@@ -14,170 +19,215 @@ from src.exceptions.user import (
     UsernameAlreadyTaken,
 )
 from src.models.user import User
-from src.schemas import user as user_schemas
-from src.services.base import CreateUpdateDeleteService, ListMixin
+from src.paginator import BasePaginator
+from src.schemas.base import PaginatedResponse
+from src.schemas.user import UserBase, UserCreate, UserPartialUpdate, UserRead
+from src.services import base as base_services
 
 
-def get_pfp_path(user_id: int):
+def get_profile_pictures_dir(user_id: int):
     """Generates path for user profile picture."""
     return f"users/{user_id}/pfp/"
 
 
-def get_pfp_url(user_id: int, image: UploadFile):
-    """Returns url for file."""
-    return f"users/{user_id}/pfp/{image.filename}"
+def get_profile_picture_uri(user_id: int, image: UploadFile):
+    """Returns URI for given profile picture."""
+    return os.path.join(get_profile_pictures_dir(user_id), image.filename)
 
 
-class UserService(ListMixin[User], CreateUpdateDeleteService[User]):
-    """Service class for User model"""
+async def _validate_username_uniqueness(
+    session: AsyncSession, username: str, user_id: int | None = None
+):
+    matching_user: bool = await session.scalar(
+        exists()
+        .where((User.username == username) & (User.id != user_id))
+        .select()
+    )
 
-    model = User
+    if matching_user:
+        raise UsernameAlreadyTaken
 
-    async def _validate_username_uniqueness(
-        self, username: str, user_id: int | None = None
-    ):
-        result = await self.session.execute(
-            select(self.model.id, self.model.username).where(
-                (self.model.username == username) & (self.model.id != user_id)
-            )
-        )
-        if result.first() is not None:
-            raise UsernameAlreadyTaken
 
-    async def _validate_email_uniqueness(
-        self, email: str, user_id: int | None = None
-    ):
-        """Validates uniqueness of a email against given user_id."""
-        result = await self.session.execute(
-            select(self.model.id, self.model.email).where(
-                (self.model.email == email) & (self.model.id != user_id)
-            )
-        )
-        if result.first() is not None:
-            raise EmailAlreadyTaken
+async def _validate_email_uniqueness(
+    session: AsyncSession, email: str, user_id: int | None = None
+):
+    matching_user: bool = await session.scalar(
+        exists().where((User.email == email) & (User.id != user_id)).select()
+    )
 
-    async def get_by_pk(self, pk: Any) -> Any:
-        """Returns ites based on its primary key"""
-        return await self._get_by_pk(pk)
+    if matching_user:
+        raise EmailAlreadyTaken
 
-    async def _get_by_username(self, username: str):
-        """Returns user with matching username"""
-        query = select(self.model).where(self.model.username == username)
-        result = await self.session.execute(query)
-        return result.scalar()
 
-    async def get_or_401(self, user_id: int):
-        """Returns user with given id. If not found, raises 401."""
-        user = await self._get_by_pk(user_id)
-        if user is None:
-            raise HTTPBadTokenException
-        return user
+async def get_by_id(session: AsyncSession, user_id: int) -> User | None:
+    """Returns user with given id or None if no user was found."""
+    return await session.get(User, user_id)
 
-    async def get_by_username_or_404(self, username: str):
-        """Returns user by his username. Raises 404 if not found"""
-        user = await self._get_by_username(username)
 
-        if user is None:
-            raise NotFound
+async def _get_by_username(
+    session: AsyncSession, username: str
+) -> User | None:
+    """Returns user with matching username."""
+    query = select(User).where(User.username == username)
+    return await session.scalar(query)
 
-        return user
 
-    async def create_user(self, schema: user_schemas.UserCreate):
-        """Creates user with hashed password."""
-        await self._validate_username_uniqueness(schema.username)
-        await self._validate_email_uniqueness(schema.email)
-        schema.password = authentication.get_hashed_password(schema.password)
-        return await self.create(schema.dict())
+async def get_or_401(session: AsyncSession, user_id: int) -> User:
+    """Returns user with given id.
+    If not found, raises 401 unauthenticated error."""
+    user = await get_by_id(session, user_id)
 
-    async def _filter_by_username_or_email(
-        self, username: str, email: str
-    ) -> Select:
-        """Returns query with users by matching username or email."""
-        return select(self.model).where(
-            self.model.username.like(username) | (self.model.email.like(email))
-        )
+    if user is None:
+        raise HTTPBadTokenException
 
-    async def search(self, keyword: str):
-        """Returns list of items matching the given keyword.
-        For now it is simple exact match."""
+    return user
 
+
+async def get_or_404(session: AsyncSession, user_id: int) -> User:
+    """Returns user with given id.
+    If user with given id does not exist, raises 404 Not Found"""
+    user = await get_by_id(session, user_id)
+
+    if user is None:
+        raise NotFound
+
+    return user
+
+
+async def get_by_username_or_404(session: AsyncSession, username: str) -> User:
+    """Returns user by his username.
+    If user is not found, raises 404 not found error"""
+    user = await _get_by_username(session, username)
+
+    if user is None:
+        raise NotFound
+
+    return user
+
+
+async def create_user(session: AsyncSession, schema: UserCreate) -> User:
+    """Creates user with hashed password."""
+    await _validate_username_uniqueness(session, schema.username)
+    await _validate_email_uniqueness(session, schema.email)
+    schema.password = authentication.get_hashed_password(schema.password)
+    return await base_services.create(session, User(**schema.dict()))
+
+
+async def list_users(
+    session: AsyncSession,
+    paginator: BasePaginator | None = None,
+    keyword: str | None = None,
+) -> PaginatedResponse[UserRead] | list[User]:
+    """Returns list of items matching the given keyword.
+    For now, it is simple exact match."""
+    query = select(User)
+
+    if keyword:
         expression = keyword + "%"
-        query = await self._filter_by_username_or_email(expression, expression)
-
-        if self._paginator:
-            return await self._paginator.get_paginated_response(query)
-
-        result = await self.session.execute(query)
-        return result.scalars().all()
-
-    async def update_profile_picture(
-        self, user_id: int, image_url: str
-    ) -> User:
-        """
-        Sets image as a profile picture of a user
-        and returns updated user info.
-        """
-        query = (
-            update(self.model)
-            .where(self.model.id == user_id)
-            .values(profile_picture=image_url)
+        query = query.where(
+            cast(Column[str], User.username).like(expression)
+            | cast(Column[str], User.email).like(expression)
         )
-        await self.session.execute(query)
-        await self.session.commit()
-        user = await self.get_or_404(user_id)
-        return user
 
-    async def remove_profile_picture(self, user_id: int):
-        """
-        Sets user's profile picture to null and returns updated info.
-        It doesn't delete file from storage.
-        """
-        query = (
-            update(self.model)
-            .where(self.model.id == user_id)
-            .values(profile_picture=None)
-        )
-        await self.session.execute(query)
-        await self.session.commit()
-        user = await self.get_or_404(user_id)
-        return user
+    if paginator:
+        return await paginator.get_paginated_response_for_model(query)
 
-    async def authenticate_user(self, username: str, password: str):
-        """Returns user model if given username and password are correct."""
-        user = await self._get_by_username(username)
-        # If user with that username is not found or password is wrong, fail.
-        if (
-            not user
-            or authentication.verify_password(password, user.password) is False
-        ):
-            raise BadCredentialsException
-        return user
+    return (await session.scalars(query)).all()
 
-    async def refresh_tokens(self, refresh_token: str):
-        """Returns new access and refresh tokens if refresh token is valid."""
-        user_id = authentication.verify_refresh_token(refresh_token)
-        if await self._get_by_pk(user_id) is None:
-            raise HTTPBadTokenException
 
-        return {
-            "access_token": authentication.create_access_token(user_id),
-            "refresh_token": authentication.create_refresh_token(user_id),
-        }
+async def update_profile_picture(
+    session: AsyncSession, user_id: int, image_url: str
+) -> User:
+    """
+    Sets image as a profile picture of a user
+    and returns updated user info.
+    """
+    user: User = await get_or_404(session, user_id)
+    return await base_services.update(
+        session, user, {"profile_picture": image_url}
+    )
 
-    async def update_user(
-        self,
-        pk: int,
-        schema: (user_schemas.UserPartialUpdate | user_schemas.UserBase),
-    ) -> User:
-        """
-        Updates user with given pk
-        Validate uniqueness of username and email,
-        if they are not met, these validation methods will raise exceptions
-        """
-        if schema.username:
-            await self._validate_username_uniqueness(schema.username, pk)
 
-        if schema.email:
-            await self._validate_email_uniqueness(schema.email, pk)
+async def remove_profile_picture(session: AsyncSession, user_id: int) -> User:
+    """
+    Sets user's profile picture to null and returns updated info.
+    It doesn't delete file from storage.
+    """
+    user: User = await get_or_404(session, user_id)
+    user.profile_picture = None
+    await session.commit()
+    await session.refresh(user)
+    return user
 
-        return await self.update(pk, schema.dict())
+
+class AuthTokens(TypedDict):
+    """Typed dict for access and refresh tokens."""
+
+    access_token: str
+    refresh_token: str
+
+
+def _generate_auth_tokens(user_id: int) -> AuthTokens:
+    """Generates access and refresh tokens for user with given id."""
+    return {
+        "access_token": authentication.create_access_token(user_id),
+        "refresh_token": authentication.create_refresh_token(user_id),
+    }
+
+
+async def authenticate_user(
+    session: AsyncSession, username: str, password: str
+) -> AuthTokens:
+    """Authenticates user with given username and password.
+    Returns user if credentials are correct, otherwise raises 401"""
+    user = await _get_by_username(session, username)
+
+    if (
+        not user
+        or authentication.verify_password(password, user.password) is False
+    ):
+        raise BadCredentialsException
+
+    return _generate_auth_tokens(user.id)
+
+
+async def refresh_tokens(
+    session: AsyncSession, refresh_token: str
+) -> AuthTokens:
+    """Returns new access and refresh tokens if refresh token is valid."""
+    user_id = authentication.verify_refresh_token(refresh_token)
+    user = await get_by_id(session, user_id)
+
+    if user is None:
+        raise HTTPBadTokenException
+
+    return _generate_auth_tokens(user.id)
+
+
+async def update_user(
+    session: AsyncSession,
+    user_id: int,
+    schema: (UserPartialUpdate | UserBase),
+) -> User:
+    """
+    Updates user with given user_id
+    Validate uniqueness of username and email,
+    if they are not met, these validation methods will raise exceptions
+    """
+    if schema.username:
+        await _validate_username_uniqueness(session, schema.username, user_id)
+
+    if schema.email:
+        await _validate_email_uniqueness(session, schema.email, user_id)
+
+    user = await get_by_id(session, user_id)
+    payload = {k: v for k, v in schema.dict().items() if v is not None}
+    return await base_services.update(session, user, payload)
+
+
+async def delete_user(session: AsyncSession, user_id: int) -> None:
+    """Deletes user with given id.
+    If user is not found, raises 401 not authenticated."""
+    user = await get_or_404(session, user_id)
+    await session.execute(delete(User).where(User.id == user.id))
+    await session.commit()

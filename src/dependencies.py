@@ -1,6 +1,6 @@
 """Module with FastAPI dependencies."""
-from collections.abc import Callable, Generator
-from functools import partial
+from collections.abc import Generator
+from typing import cast
 
 from fastapi import Cookie, Depends, Query, WebSocket
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,10 +11,6 @@ from src.db import async_session
 from src.exceptions.chat import WebSocketBadTokenException
 from src.exceptions.user import HTTPBadTokenException
 from src.paginator import LimitOffsetPaginator
-from src.services.base import BaseService
-from src.services.chat import ChatService
-from src.services.friendship import FriendshipService
-from src.services.user import UserService
 from src.staticfiles import BaseStaticFilesManager, LocalStaticFilesManager
 
 
@@ -59,23 +55,10 @@ def get_current_user_id_from_cookie(access_token: str = Cookie()) -> int:
 def get_paginator(
     page: int = Query(default=1),
     page_size: int = Query(default=config.PAGE_SIZE_DEFAULT),
-    db_session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     """Returns pagination with page and page size query params."""
-    return LimitOffsetPaginator(page, page_size, db_session)
-
-
-def get_service(
-    service: Callable[[AsyncSession], BaseService],
-    db_session: AsyncSession = Depends(get_db),
-) -> Generator[BaseService, None, None]:
-    """
-    Base function for creating service dependency
-    for using with fastapi dependency injection tool.
-    Services give us a class with crud operations etc.
-    with established db connection and settings.
-    """
-    yield service(db_session)
+    return LimitOffsetPaginator(session, page, page_size)
 
 
 class AuthWebSocket(WebSocket):
@@ -93,10 +76,4 @@ def get_auth_websocket(
     Access token is taken from the `access_token` cookie.
     If no token is provided(unauthorized) handshake response returns 403"""
     websocket.user_id = user_id
-    return websocket
-
-
-# Dependencies for services, should be used with Depends().
-get_user_service = partial(get_service, UserService)
-get_friendship_service = partial(get_service, FriendshipService)
-get_chat_service = partial(get_service, ChatService)
+    return cast(AuthWebSocket, websocket)

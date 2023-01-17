@@ -1,21 +1,27 @@
 """Module with Chat API Routes & Websockets"""
-from fastapi import APIRouter, Depends, Form, status
-from fastapi.concurrency import run_until_first_complete
+import asyncio
 
-from src.db import broadcast
+from fastapi import APIRouter, Depends, Form, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.db import broadcaster
 from src.dependencies import (
     AuthWebSocket,
     get_auth_websocket,
-    get_chat_service,
     get_current_user_id_from_bearer,
+    get_db,
     get_paginator,
-    get_user_service,
 )
 from src.paginator import BasePaginator
 from src.schemas.base import DetailMessage, PaginatedResponse
-from src.schemas.chat import ChatCreate, ChatRead, ChatUpdate, MessageRead
-from src.services.chat import ChatService
-from src.services.user import UserService
+from src.schemas.chat import (
+    ChatCreate,
+    ChatRead,
+    ChatReadWithMembers,
+    ChatUpdate,
+    MessageRead,
+)
+from src.services import chat as chat_services
 from src.websocket_managers.chat import PrivateMessageManager
 
 router = APIRouter(prefix="/api", tags=["chat"])
@@ -24,112 +30,132 @@ router = APIRouter(prefix="/api", tags=["chat"])
 @router.websocket("/privates")
 async def private_messages(
     auth_websocket: AuthWebSocket = Depends(get_auth_websocket),
-    chat_service: ChatService = Depends(get_chat_service),
-    user_service: UserService = Depends(get_user_service),
+    session: AsyncSession = Depends(get_db),
 ):
     """Websocket for sending and receiving private messages."""
     await auth_websocket.accept()
-    manager = PrivateMessageManager(broadcast, chat_service, user_service)
+    manager = PrivateMessageManager(broadcaster, session)
 
-    await run_until_first_complete(
-        (manager.receiver, {"websocket": auth_websocket}),
-        (manager.sender, {"websocket": auth_websocket}),
+    await asyncio.wait(
+        [
+            asyncio.create_task(manager.receiver(auth_websocket)),
+            asyncio.create_task(manager.sender(auth_websocket)),
+        ],
+        return_when=asyncio.FIRST_COMPLETED,
     )
 
 
 @router.get(
     "/users/{target_id}/messages",
     response_model=PaginatedResponse[MessageRead],
+    responses={
+        status.HTTP_404_NOT_FOUND: {
+            "detail": DetailMessage,
+            "description": "Chat with target user does not exist.",
+        }
+    },
 )
-def get_private_messages_from_user(
+async def get_private_messages_from_user(
     target_id: int,
-    chat_service: ChatService = Depends(get_chat_service),
     user_id: int = Depends(get_current_user_id_from_bearer),
-    paginator: BasePaginator[MessageRead] = Depends(get_paginator),
+    session: AsyncSession = Depends(get_db),
+    paginator: BasePaginator = Depends(get_paginator),
 ):
     """Returns messages with target user."""
-    chat_service.set_user(user_id)
-    chat_service.set_paginator(paginator)
-    return chat_service.get_messages_from_private_chat(target_id)
+    return await chat_services.get_messages_from_private_chat(
+        session, user_id, target_id, paginator
+    )
 
 
-@router.get(
-    "/chats",
-    response_model=PaginatedResponse[ChatRead],
-    responses={status.HTTP_409_CONFLICT: {"model": DetailMessage}},
-)
-def list_public_chats(
+@router.get("/chats", response_model=PaginatedResponse[ChatReadWithMembers])
+async def list_public_chats(
     keyword: str | None = None,
-    chat_service: ChatService = Depends(get_chat_service),
-    paginator: BasePaginator[ChatRead] = Depends(get_paginator),
+    session: AsyncSession = Depends(get_db),
+    paginator: BasePaginator = Depends(get_paginator),
 ):
     """List public chats as well as search through them."""
-    chat_service.set_paginator(paginator)
-
-    if keyword:
-        return chat_service.search_public_chats(keyword)
-
-    return chat_service.all()
+    return await chat_services.list_chats(session, paginator, keyword)
 
 
 @router.post(
     "/chats",
-    response_model=ChatRead,
+    response_model=ChatReadWithMembers,
     status_code=status.HTTP_201_CREATED,
-    responses={status.HTTP_400_BAD_REQUEST: {"model": DetailMessage}},
+    responses={
+        status.HTTP_409_CONFLICT: {
+            "model": DetailMessage,
+            "description": "Chat name is taken.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "model": DetailMessage,
+            "description": "User with given id does not exist.",
+        },
+    },
 )
-def create_public_chat(
+async def create_public_chat(
     chat: ChatCreate,
     user_id: int = Depends(get_current_user_id_from_bearer),
-    chat_service: ChatService = Depends(get_chat_service),
+    session: AsyncSession = Depends(get_db),
 ):
-    """Create public chat."""
-    chat_service.set_user(user_id)
-    return chat_service.create_public_chat(chat)
+    """Create public chat. Makes creator of chat owner."""
+    return await chat_services.create_public_chat(session, user_id, chat)
 
 
 @router.get(
     "/chats/{chat_id}",
-    response_model=ChatRead,
-    responses={status.HTTP_404_NOT_FOUND: {"model": DetailMessage}},
+    response_model=ChatReadWithMembers,
+    responses={
+        status.HTTP_404_NOT_FOUND: {
+            "model": DetailMessage,
+            "description": "Chat is not found.",
+        }
+    },
 )
-def get_public_chat(
-    chat_id: int, service: ChatService = Depends(get_chat_service)
+async def get_public_chat(
+    chat_id: int, session: AsyncSession = Depends(get_db)
 ):
     """Get public chat detail with given id.
     If no public chat is found returns 404."""
-    return service.get_or_404(chat_id)
+    return await chat_services.get_public_chat_or_404(session, chat_id)
 
 
 @router.put(
     "/chats/{chat_id}",
     response_model=ChatRead,
-    responses={status.HTTP_403_FORBIDDEN: {"model": DetailMessage}},
+    responses={
+        status.HTTP_403_FORBIDDEN: {
+            "model": DetailMessage,
+            "description": "User is not group admin.",
+        }
+    },
 )
-def update_public_chat(
+async def update_public_chat(
     chat_id: int,
     data: ChatUpdate,
     user_id: int = Depends(get_current_user_id_from_bearer),
-    service: ChatService = Depends(get_chat_service),
+    session: AsyncSession = Depends(get_db),
 ):
     """Update public chat info. If user is not admin, returns 403."""
-    service.set_user(user_id)
-    return service.update_chat(chat_id, data)
+    return await chat_services.update_chat(session, user_id, chat_id, data)
 
 
 @router.delete(
     "/chats/{chat_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses={status.HTTP_403_FORBIDDEN: {"model": DetailMessage}},
+    responses={
+        status.HTTP_403_FORBIDDEN: {
+            "model": DetailMessage,
+            "description": "User is not group owner.",
+        }
+    },
 )
-def delete_public_chat(
+async def delete_public_chat(
     chat_id: int,
     user_id: int = Depends(get_current_user_id_from_bearer),
-    service: ChatService = Depends(get_chat_service),
+    session: AsyncSession = Depends(get_db),
 ):
     """Deletes chat with given id. If user is not owner, returns 403."""
-    service.set_user(user_id)
-    service.delete_chat(chat_id)
+    await chat_services.delete_chat(session, user_id, chat_id)
 
 
 @router.post("/chats/{chat_id}/invite-link")

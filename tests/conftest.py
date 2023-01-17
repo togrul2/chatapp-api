@@ -15,12 +15,14 @@ from sqlalchemy.orm import sessionmaker
 
 from src import authentication
 from src.config import BASE_DIR, settings
+from src.dependencies import get_db, get_staticfiles_manager
+from src.main import app as fastapi_app
 from src.models.user import Friendship, User
 from src.staticfiles import LocalStaticFilesManager
 from src.utils import parse_url
 from tests.async_sql import (
-    DBSQLAsyncSession,
-    PostgreSQLAsyncSession,
+    DBSQLAsyncManager,
+    PostgreSQLAsyncManager,
     create_tables,
     drop_tables,
 )
@@ -38,14 +40,18 @@ test_db_url = (
     f"{db_user}:{db_password}@{db_hostname}:{db_port}/{test_db_name}"
 )
 
-dbms_session: DBSQLAsyncSession = PostgreSQLAsyncSession(
+dbms_session: DBSQLAsyncManager = PostgreSQLAsyncManager(
     db_user, db_password, db_hostname, db_port
 )
 
 
 test_engine = create_async_engine(url=test_db_url)
 async_session = sessionmaker(
-    test_engine, autocommit=False, expire_on_commit=False, class_=AsyncSession
+    test_engine,
+    autocommit=False,
+    expire_on_commit=False,
+    class_=AsyncSession,
+    autoflush=False,
 )
 
 
@@ -54,6 +60,7 @@ TEST_STATIC_ROOT = BASE_DIR / "test_static"
 
 @pytest.fixture(scope="session", autouse=True)
 def event_loop():
+    """Custom event loop fixture. Implemented for making it session scoped."""
     loop = asyncio.get_event_loop()
     yield loop
     loop.close()
@@ -61,6 +68,8 @@ def event_loop():
 
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def setup_teardown():
+    """Sets up database and local static files manager.
+    Tears down after pytest session is over."""
     await dbms_session.create_database(test_db_name)
     await create_tables(test_engine)
     os.mkdir(TEST_STATIC_ROOT)
@@ -72,6 +81,7 @@ async def setup_teardown():
 
 @pytest_asyncio.fixture(scope="session")
 async def session():
+    """Fixture providing Async db session."""
     async with async_session() as db_session:
         yield db_session
 
@@ -80,8 +90,6 @@ async def session():
 async def test_app(session: AsyncSession):
     """Test FastAPI app for processing requests.
     Uses testing database and staticfiles manager."""
-    from src.dependencies import get_db, get_staticfiles_manager
-    from src.main import app as fastapi_app
 
     def _get_test_db():
         """Testing dependency for getting db session."""

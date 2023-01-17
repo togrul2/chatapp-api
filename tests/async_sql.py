@@ -1,3 +1,4 @@
+"""Async managers for SQL databases."""
 from abc import ABC, abstractmethod
 from collections.abc import Coroutine, Sequence
 from contextlib import asynccontextmanager
@@ -10,8 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 from src.db import Base
 
 
-class DBSQLAsyncSession(ABC):
-    """Abstract class for db connection management."""
+class DBSQLAsyncManager(ABC):
+    """Abstract class (aka interface) for db managers."""
 
     @abstractmethod
     async def get_connection(self):
@@ -32,7 +33,9 @@ class DBSQLAsyncSession(ABC):
 
 
 @dataclass
-class PostgreSQLAsyncSession(DBSQLAsyncSession):
+class PostgreSQLAsyncManager(DBSQLAsyncManager):
+    """Asynchronous PostgreSQL connection & management class."""
+
     username: str
     password: str
     host: str
@@ -50,7 +53,7 @@ class PostgreSQLAsyncSession(DBSQLAsyncSession):
         yield conn
         await conn.close()
 
-    async def run_commands(self, *commands: Sequence[str]):
+    async def run_commands(self, *commands: Sequence[str]) -> None:
         """Runs given command in database.
         Raises error if not connection is established"""
 

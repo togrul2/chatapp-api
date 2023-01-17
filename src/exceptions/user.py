@@ -22,3 +22,8 @@ HTTPBadTokenException = HTTPException(
     detail="Token is either expired or invalid.",
     headers={"WWW-Authenticate": "Bearer"},
 )
+
+BadImageFileMIME = HTTPException(
+    status_code=400,
+    detail="Wrong file type, only jpeg and png files are allowed",
+)

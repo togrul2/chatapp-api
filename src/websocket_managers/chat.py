@@ -5,11 +5,14 @@ from dataclasses import dataclass
 
 from broadcaster import Broadcast
 from fastapi import WebSocket
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.dependencies import AuthWebSocket
+from src.models.chat import Message
 from src.schemas.user import UserRead
-from src.services.chat import ChatService
-from src.services.user import UserService
+from src.services import base as base_services
+from src.services import chat as chat_services
+from src.services import user as user_services
 
 
 class BasePubSubManager(ABC):
@@ -27,11 +30,10 @@ class BasePubSubManager(ABC):
 @dataclass
 class PrivateMessageManager(BasePubSubManager):
     """Private messages' pub/sub manager.
-    Manages channels and messages routing"""
+    Manages message channels and routing."""
 
     broadcaster: Broadcast
-    chat_service: ChatService
-    user_service: UserService
+    session: AsyncSession
 
     @staticmethod
     def get_channel_for_user(user_id: int):
@@ -42,17 +44,24 @@ class PrivateMessageManager(BasePubSubManager):
         async for body in websocket.iter_json():
 
             if not frozenset({"message", "to", "type"}).issubset(body.keys()):
+                # TODO: validate with pydantic
                 return
 
             user_channel = self.get_channel_for_user(body["to"])
-            chat = self.chat_service.get_or_create_private_chat(
-                body["to"], websocket.user_id
+            chat = await chat_services.get_or_create_private_chat(
+                self.session, body["to"], websocket.user_id
             )
-            self.chat_service.create_message(
-                chat.id, websocket.user_id, body["message"]
+            await base_services.create(
+                self.session,
+                Message(
+                    chat_id=chat.id,
+                    user_id=websocket.user_id,
+                    body=body["message"],
+                ),
             )
+
             body["from"] = UserRead.from_orm(
-                self.user_service.get_by_pk(websocket.user_id)
+                user_services.get_by_id(self.session, websocket.user_id)
             ).dict()
             await self.broadcaster.publish(
                 channel=user_channel, message=json.dumps(body)

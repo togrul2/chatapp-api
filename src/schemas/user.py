@@ -44,8 +44,9 @@ class UserRead(UserBase):
     @validator("profile_picture")
     def format_profile_picture(cls, value: str):
         """Prepends domain to the file path."""
+
         if value is not None:
-            return parse.urljoin(STATIC_DOMAIN, value)
+            return parse.urljoin(STATIC_DOMAIN, parse.quote(value))
         return value
 
 

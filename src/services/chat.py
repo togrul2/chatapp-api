@@ -1,230 +1,307 @@
 """DB services for chat related models & routes."""
+from typing import Any, cast
 
-from typing import Any
-
-from sqlalchemy import Column
+from sqlalchemy import Column, delete, exists, func, select
+from sqlalchemy.engine import Row
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer, joinedload
 
 from src.exceptions.base import NotFound
 from src.exceptions.chat import (
     ChatNameTakenException,
+    UserDoesNotExist,
     UserNotAdminException,
     UserNotOwnerException,
 )
 from src.models.chat import Chat, Membership, Message
-from src.models.user import User
+from src.paginator import BasePaginator
 from src.schemas.base import PaginatedResponse
-from src.schemas.chat import ChatCreate, ChatRead, ChatUpdate, MessageRead
-from src.services.base import CreateUpdateDeleteService, ListMixin
+from src.schemas.chat import (
+    ChatCreate,
+    ChatReadWithMembers,
+    ChatUpdate,
+    MessageRead,
+)
+from src.services import base as base_services
 
 
-class ChatService(ListMixin, CreateUpdateDeleteService):
-    """DB Service for chat model."""
+async def _create_chat(
+    session: AsyncSession,
+    schema_dict: dict[str, Any],
+    user_id: int | None = None,
+) -> Chat:
+    """Custom create method for chat model."""
+    payload: dict[str, Any] = {**schema_dict, "private": False}
+    users = list(
+        filter(lambda user: user["id"] != user_id, payload.pop("users"))
+    )
 
-    model = Chat
-    user_id: int
-
-    def create(self, schema_dict: dict[str, Any]) -> Chat:
-        """Custom create method for chat model."""
-        users = schema_dict.pop("users")
-
-        chat = Chat(**schema_dict)
-
-        for user_id in users:
-            # TODO: Optimize, bulk create
-            chat.users.append(self.session.query(User).get(user_id))
-
-        self.session.add(chat)
-        self.session.commit()
-        return chat
-
-    def set_user(self, user_id: int) -> None:
-        """Setter for `user_id`"""
-        self.user_id = user_id
-
-    def _get_private_chat(self, user1_id: int, user2_id: int) -> Chat | None:
-        """Returns private chat with given users' ids."""
-        if user1_id == user2_id:
-            return None
-
-        return (
-            self.session.query(self.model)
-            .filter(
-                (Membership.chat_id == self.model.id)
-                & (Membership.user_id == user1_id)
+    chat = await base_services.create(
+        session, Chat(**payload), commit=False, flush=True
+    )
+    await base_services.create(
+        session,
+        Membership(
+            user_id=user_id,
+            chat_id=chat.id,
+            is_owner=True,
+            is_admin=True,
+            accepted=True,
+        ),
+        commit=False,
+    )
+    for user_dict in users:
+        try:
+            await base_services.create(
+                session,
+                Membership(
+                    chat_id=chat.id,
+                    user_id=user_dict["id"],
+                    is_admin=user_dict["is_admin"],
+                    is_owner=False,
+                    accepted=True,
+                ),
+                commit=False,
+                flush=True,
             )
-            .intersect(
-                self.session.query(self.model).filter(
-                    (Membership.chat_id == self.model.id)
-                    & (Membership.user_id == user2_id)
-                )
+
+        except IntegrityError as exc:
+            await session.rollback()
+            raise UserDoesNotExist(
+                f"User with id of {user_dict['id']} does not exist."
+            ) from exc
+
+    await session.commit()
+    return chat
+
+
+async def _get_private_chat(
+    session: AsyncSession, user_id: int, target_id: int
+) -> Chat | None:
+    """Returns private chat with given users' ids."""
+    if user_id == target_id:
+        return None
+
+    query = select(Chat).from_statement(
+        select(Chat)
+        .join(Membership, Membership.chat_id == Chat.id)
+        .where(Membership.user_id == user_id)
+        .intersect(
+            select(Chat)
+            .join(Membership, Membership.chat_id == Chat.id)
+            .where(Membership.user_id == target_id)
+        )
+    )
+    return await session.scalar(query)
+
+
+async def get_or_create_private_chat(
+    session: AsyncSession, user1_id: int, user2_id: int
+) -> Chat:
+    """Returns private chat of given two users.
+    If it doesn't exist, creates it."""
+    chat = await _get_private_chat(session, user1_id, user2_id)
+
+    if chat is None:
+        return await _create_chat(
+            session, {"private": True, "users": [user1_id, user2_id]}
+        )
+
+    return chat
+
+
+async def create_message(
+    session: AsyncSession, chat_id: int, sender_id: int, body: str
+) -> Message:
+    """Creates message at given chat from
+    given sender to given receiver."""
+    return await base_services.create(
+        session, Message(chat_id=chat_id, sender_id=sender_id, body=body)
+    )
+
+
+async def get_messages_from_private_chat(
+    session: AsyncSession,
+    user_id: int,
+    target_id: int,
+    paginator: BasePaginator | None = None,
+) -> PaginatedResponse[MessageRead]:
+    """Returns messages from a private chat with a given id."""
+    if (chat := await _get_private_chat(session, user_id, target_id)) is None:
+        raise NotFound
+
+    query = (
+        select(Message)
+        .options(joinedload(Message.sender), defer("sender_id"))
+        .where(Message.chat_id == chat.id)
+        .order_by(cast(Column, Message.created_at).desc())
+    )
+
+    if paginator:
+        return await paginator.get_paginated_response_for_model(query)
+
+    return (await session.scalars(query)).all()
+
+
+async def _validate_not_null_unique_chat_name(
+    session: AsyncSession, name: str, chat_id: int | None = None
+) -> None:
+    """Validates whether there are chats with the same name as given one.
+    Empty names can be duplicated, so they won't count.
+    Also checks whether this name belongs to target chat if it exists.
+    If some check fails raises http exception"""
+    matching_chat: bool = await session.scalar(
+        exists().where((Chat.name == name) & (Chat.id != chat_id)).select()
+    )
+
+    if matching_chat:
+        raise ChatNameTakenException
+
+
+async def list_chats(
+    session: AsyncSession,
+    paginator: BasePaginator | None = None,
+    keyword: str | None = None,
+) -> PaginatedResponse[ChatReadWithMembers] | list[Row]:
+    """Returns list of all records.
+    If keyword passed returns matching chats only."""
+    query = (
+        select(
+            [
+                Chat.id,
+                Chat.created_at,
+                Chat.name,
+                func.count(Membership.id).label("members"),
+            ]
+        )
+        .join(Membership, Chat.id == Membership.chat_id)
+        .where(Chat.private == False)  # noqa: E712
+        .group_by(Chat.id)
+    )
+
+    if keyword:
+        expression = keyword.upper() + "%"
+        query = query.where(
+            cast(Column[str], func.upper(Chat.name)).like(expression)
+        )
+
+    if paginator:
+        return await paginator.get_paginated_response_for_rows(query)
+
+    return (await session.execute(query)).all()
+
+
+async def create_public_chat(
+    session: AsyncSession, user_id: int, schema: ChatCreate
+) -> Row:
+    """Creates chat with membership to a given user."""
+    await _validate_not_null_unique_chat_name(session, schema.name)
+    chat = await _create_chat(session, schema.dict(), user_id)
+
+    return (
+        await session.execute(
+            select(
+                Chat.id,
+                Chat.name,
+                Chat.created_at,
+                func.count(Membership.id).label("members"),
             )
-            .first()
+            .join(Membership, Membership.chat_id == Chat.id)
+            .where(Chat.id == chat.id)
+            .group_by(Chat.id)
         )
+    ).one()
 
-    def get_or_create_private_chat(self, user1_id: int, user2_id: int) -> Chat:
-        """Returns private chat of given two users.
-        If it doesn't exist, creates it."""
-        chat = self._get_private_chat(user1_id, user2_id)
 
-        if chat is None:
-            self.create({"private": True, "users": [user1_id, user2_id]})
-
-        return chat
-
-    def create_message(
-        self, chat_id: int, sender_id: int, body: str
-    ) -> Message:
-        """Creates message at given chat from
-        given sender to given receiver."""
-        message = Message(chat_id=chat_id, sender_id=sender_id, body=body)
-        self.session.add(message)
-        self.session.commit()
-        return message
-
-    def get_messages_from_private_chat(
-        self, target_id: int
-    ) -> PaginatedResponse[MessageRead]:
-        """Returns messages from a private chat with a given id."""
-        if not self.user_id:
-            raise Exception("Set the authenticated user id first")
-
-        chat = self._get_private_chat(self.user_id, target_id)
-
-        if chat is None:
-            raise NotFound
-
-        query = (
-            self.session.query(Message)
-            .options(joinedload(Message.sender), defer("sender_id"))
-            .filter(Message.chat_id == chat.id)
-            .order_by(Message.created_at.desc())
+async def _get_public_chat(session: AsyncSession, chat_id: int) -> Chat | None:
+    """Returns public chat with given id.
+    Additionally, calculates its number of members"""
+    chat_query = await session.execute(
+        select(
+            [
+                Chat.id,
+                Chat.name,
+                Chat.created_at,
+                func.count(Membership.id).label("members"),
+            ]
         )
+        .join(Membership, Membership.chat_id == Chat.id)
+        .where((Chat.private == False) & (Chat.id == chat_id))  # noqa: E712
+        .group_by(Chat.id)
+    )
 
-        if self._paginator:
-            return self._paginator.get_paginated_response(query)
+    return chat_query.one_or_none()
 
-        return query.all()
 
-    def _create_membership(
-        self, membership_dict: dict[str, Any]
-    ) -> Membership:
-        """Creates membership based on given schema"""
-        membership = Membership(**membership_dict)
-        self.session.add(membership)
-        self.session.commit()
-        return membership
+async def get_public_chat_or_404(session: AsyncSession, chat_id: int) -> Chat:
+    """Returns single chat with given id.
+    If it does not exists, returns 404 error code."""
+    chat = await _get_public_chat(session, chat_id)
 
-    def _validate_not_null_unique_chat_name(
-        self, name: str, chat_id: int | None = None
-    ) -> None:
-        """Validates whether there are chats with the same name as given one.
-        Empty names can be duplicated, so they won't count.
-        Also checks whether this name belongs to target chat if it exists.
-        If some check fails raises http exception"""
-        query = self.session.query(self.model).filter(self.model.name == name)
+    if chat is None:
+        raise NotFound
 
-        if chat_id:
-            query.filter(self.model.id != chat_id)
+    return chat
 
-        if query.first() is not None:
-            raise ChatNameTakenException
 
-    def all(self) -> PaginatedResponse[ChatRead] | list[ChatRead]:
-        """Returns list of all records."""
-        query = self.session.query(self.model).filter(
-            self.model.private == False  # noqa: E712
-        )
-
-        if self._paginator:
-            return self._paginator.get_paginated_response(query)
-
-        return query.all()
-
-    def search_public_chats(self, keyword: str):
-        """Searches public chat matching the given keyword."""
-        expression = keyword + "%"
-        query = (
-            self.session.query(self.model)
-            .filter(self.model.private == False)  # noqa: E712
-            .filter(self.model.name.like(expression))
-        )
-
-        if self._paginator:
-            return self._paginator.get_paginated_response(query)
-
-        return query.all()
-
-    def create_public_chat(self, schema: ChatCreate) -> Chat:
-        """Creates chat with membership to a given user."""
-        if self.user_id in schema.users:
-            schema.users.remove(self.user_id)
-
-        self._validate_not_null_unique_chat_name(schema.name)
-
-        payload = schema.dict()
-        payload.update({"private": False})
-        chat = self.create(payload)
-        self._create_membership(
-            {
-                "user_id": self.user_id,
-                "chat_id": chat.id,
-                "is_owner": True,
-                "is_admin": True,
-                "accepted": True,
-            }
-        )
-        return chat
-
-    def get_public_chat(self, chat_id: int) -> Chat | None:
-        """Returns single chat with given id.
-        If it does not exists, returns 404 error code."""
-        chat = (
-            self.session.query(self.model)
-            .filter(
-                (self.model.id == chat_id)
-                & (self.model.private == False)  # noqa: E712
-            )
-            .first()
-        )
-
-        if chat is None:
-            raise NotFound
-
-        return chat
-
-    def _check_role(self, chat_id: int, role: Column) -> bool:
-        """Returns whether set user has given role in chat or not."""
-        query = self.session.query(Membership).filter(
+async def _check_role(
+    session: AsyncSession, user_id: int, chat_id: int, role: Column[bool]
+) -> bool:
+    """Returns whether set user has given role in chat or not."""
+    query = (
+        exists()
+        .where(
             (Membership.chat_id == chat_id)
-            & (Membership.user_id == self.user_id)
+            & (Membership.user_id == user_id)
             & (role == True)  # noqa: E712
         )
-        return query.first() is not None
+        .select()
+    )
+    return await session.scalar(query)
 
-    def _is_chat_admin(self, chat_id: int) -> bool:
-        """Returns whether set user is given chat's admin or not."""
-        return self._check_role(chat_id, Membership.is_admin)
 
-    def _is_chat_owner(self, chat_id: int) -> bool:
-        """Returns whether set user is given chat's admin or not."""
-        return self._check_role(chat_id, Membership.is_owner)
+async def _is_chat_admin(
+    session: AsyncSession, user_id: int, chat_id: int
+) -> bool:
+    """Returns whether set user is given chat's admin or not."""
+    return await _check_role(session, user_id, chat_id, Membership.is_admin)
 
-    def update_chat(self, chat_id: int, payload: ChatUpdate) -> Chat | None:
-        """Updates chat's information."""
-        if not self._is_chat_admin(chat_id):
-            raise UserNotAdminException
 
-        return self.update(chat_id, payload.dict())
+async def _is_chat_owner(
+    session: AsyncSession, user_id: int, chat_id: int
+) -> bool:
+    """Returns whether set user is given chat's admin or not."""
+    return await _check_role(session, user_id, chat_id, Membership.is_owner)
 
-    def delete_chat(self, chat_id: int) -> None:
-        """Deletes public chat with given id.
-        If chat doesn't exists, raises 404 http exception."""
-        if not self._is_chat_owner(chat_id):
-            raise UserNotOwnerException
 
-        self.session.query(Membership).filter(
-            Membership.chat_id == chat_id
-        ).delete()
+async def update_chat(
+    session: AsyncSession, user_id: int, chat_id: int, payload: ChatUpdate
+) -> Chat:
+    """Updates chat's information."""
+    chat = await session.get(Chat, chat_id)
 
-        return self.delete(chat_id)
+    if chat is None:
+        raise NotFound
+
+    if not await _is_chat_admin(session, user_id, chat_id):
+        raise UserNotAdminException
+
+    return await base_services.update(session, chat, payload.dict())
+
+
+async def delete_chat(
+    session: AsyncSession, user_id: int, chat_id: int
+) -> None:
+    """Deletes public chat with given id.
+    If chat doesn't exist, raises 404 http exception."""
+    chat = await get_public_chat_or_404(session, chat_id)
+
+    if not await _is_chat_owner(session, user_id, chat_id):
+        raise UserNotOwnerException
+
+    await session.execute(
+        delete(Membership).where(Membership.chat_id == chat.id)
+    )
+    await session.execute(delete(Chat).where(Chat.id == chat.id))
+    await session.commit()

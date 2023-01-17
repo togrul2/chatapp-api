@@ -15,19 +15,33 @@ class BaseChat(BaseModel):
         orm_mode = True
 
 
+class UserDict(BaseModel):
+    """Pydantic validation model for
+    validating user field in chat operations."""
+
+    id: int
+    is_admin: bool = False
+
+
 class ChatCreate(BaseChat):
     """Pydantic validation schema for handling chat model write"""
 
     name: constr(min_length=2, strip_whitespace=True)
-    users: list[int]
+    users: list[UserDict]
 
 
 class ChatRead(BaseChat):
-    """Pydantic validation schema for handling chat model read"""
+    """Pydantic validation schema for handling chat model read."""
 
     id: int
-    number_of_members: int
     created_at: datetime
+
+
+class ChatReadWithMembers(ChatRead):
+    """Pydantic validation schema for
+    handling chat model read with members field."""
+
+    members: int
 
 
 class ChatUpdate(BaseChat):

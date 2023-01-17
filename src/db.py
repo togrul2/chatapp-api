@@ -24,7 +24,7 @@ async_session = sessionmaker(
 Base = declarative_base()
 
 # Broadcaster-Redis
-broadcast = Broadcast(settings.redis_url)
+broadcaster = Broadcast(settings.redis_url)
 
 
 async def ping_sql_database():
