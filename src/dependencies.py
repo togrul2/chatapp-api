@@ -1,12 +1,20 @@
 """Module with FastAPI dependencies."""
-from collections.abc import Generator
-from typing import cast
+from collections.abc import AsyncIterator
 
-from fastapi import Cookie, Depends, Query, WebSocket
+from fastapi import Cookie, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src import config
-from src.authentication import TokenType, get_user_from_token, oauth2_scheme
+from src.authentication import (
+    AuthTokens,
+    get_user_id_from_token,
+    oauth2_scheme,
+)
+from src.config import (
+    PAGE_SIZE_DEFAULT,
+    STATIC_DOMAIN,
+    STATIC_ROOT,
+    STATIC_URL,
+)
 from src.db import async_session
 from src.exceptions.chat import WebSocketBadTokenException
 from src.exceptions.user import HTTPBadTokenException
@@ -14,7 +22,7 @@ from src.paginator import LimitOffsetPaginator
 from src.staticfiles import BaseStaticFilesManager, LocalStaticFilesManager
 
 
-async def get_db() -> Generator[AsyncSession, None, None]:
+async def get_db() -> AsyncIterator[AsyncSession]:
     """Returns db session for FastAPI dependency injection."""
     db_session = async_session()
     try:
@@ -25,9 +33,7 @@ async def get_db() -> Generator[AsyncSession, None, None]:
 
 def get_staticfiles_manager() -> BaseStaticFilesManager:
     """Dependency for staticfiles"""
-    return LocalStaticFilesManager(
-        config.STATIC_DOMAIN, config.STATIC_URL, config.STATIC_ROOT
-    )
+    return LocalStaticFilesManager(STATIC_DOMAIN, STATIC_URL, STATIC_ROOT)
 
 
 def get_current_user_id_from_bearer(
@@ -37,9 +43,12 @@ def get_current_user_id_from_bearer(
     Dependency for getting logged user's id from `authorization` header.
     Returns 401 if unauthenticated.
     """
-    return get_user_from_token(
-        TokenType.ACCESS, HTTPBadTokenException, access_token
-    )
+    user_id, err = get_user_id_from_token(AuthTokens.ACCESS, access_token)
+
+    if err:
+        raise HTTPBadTokenException
+
+    return user_id
 
 
 def get_current_user_id_from_cookie(access_token: str = Cookie()) -> int:
@@ -47,33 +56,18 @@ def get_current_user_id_from_cookie(access_token: str = Cookie()) -> int:
     Dependency for getting logged user's id from `access_token` cookie.
     Returns 401 if unauthenticated.
     """
-    return get_user_from_token(
-        TokenType.ACCESS, WebSocketBadTokenException, access_token
-    )
+    user_id, err = get_user_id_from_token(AuthTokens.ACCESS, access_token)
+
+    if err:
+        raise WebSocketBadTokenException
+
+    return user_id
 
 
 def get_paginator(
     page: int = Query(default=1),
-    page_size: int = Query(default=config.PAGE_SIZE_DEFAULT),
+    page_size: int = Query(default=PAGE_SIZE_DEFAULT),
     session: AsyncSession = Depends(get_db),
 ):
     """Returns pagination with page and page size query params."""
     return LimitOffsetPaginator(session, page, page_size)
-
-
-class AuthWebSocket(WebSocket):
-    """Websocket with authenticated user's id attribute."""
-
-    user_id: int
-
-
-def get_auth_websocket(
-    websocket: WebSocket,
-    user_id: int = Depends(get_current_user_id_from_cookie),
-) -> AuthWebSocket:
-    """
-    Dependency returns websocket with the id of the logged in user.
-    Access token is taken from the `access_token` cookie.
-    If no token is provided(unauthorized) handshake response returns 403"""
-    websocket.user_id = user_id
-    return cast(AuthWebSocket, websocket)

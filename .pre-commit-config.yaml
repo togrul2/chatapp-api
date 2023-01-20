@@ -24,21 +24,21 @@ repos:
       - id: black
         language_version: python3.10
         exclude: ^src/alembic/
-        files: ^src/
+        files: ^src/|tests/
 
   - repo: https://github.com/PyCQA/isort
     rev: 5.10.1
     hooks:
       - id: isort
         exclude: ^src/alembic/
-        files: ^src/
+        files: ^src/|tests/
 
   - repo: https://github.com/PyCQA/flake8
     rev: 5.0.4
     hooks:
       - id: flake8
         exclude: ^src/alembic/
-        files: ^src/
+        files: ^src/|tests/
         additional_dependencies: [flake8-isort]
 
 # sets up .pre-commit-ci.yaml to ensure pre-commit dependencies stay up to date

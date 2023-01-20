@@ -3,10 +3,10 @@ from collections.abc import Sequence
 
 from sqlalchemy import Column, DateTime, Integer, func
 
-from src import db
+from src.db import Base
 
 
-class Base(db.Base):
+class CustomBase(Base):
     """Base class for models"""
 
     __abstract__ = True
@@ -27,7 +27,7 @@ class Base(db.Base):
         return f"{self.__class__.__name__}({attrs})"
 
 
-class CreateTimestampMixin(Base):
+class CreateTimestampMixin(CustomBase):
     """
     Mixin for adding created at field to the model.
 

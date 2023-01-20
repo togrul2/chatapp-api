@@ -1,6 +1,6 @@
 """Tests for user endpoints."""
 import os
-from tempfile import NamedTemporaryFile
+from tempfile import NamedTemporaryFile, _TemporaryFileWrapper  # noqa
 from typing import cast
 from urllib import parse
 
@@ -121,7 +121,7 @@ class TestToken:
 
     async def test_refresh_success(self, client: AsyncClient, user: User):
         """Test refresh endpoint successful attempt."""
-        refresh_token = create_refresh_token(user.id)
+        refresh_token = create_refresh_token(cast(int, user.id))
         response = await client.post(
             self.refresh_url, data={"refresh_token": refresh_token}
         )
@@ -133,7 +133,7 @@ class TestToken:
 
     async def test_refresh_bad_data(self, client: AsyncClient, user: User):
         """Test refresh endpoint with invalid refresh token."""
-        refresh_token = create_access_token(user.id)
+        refresh_token = create_access_token(cast(int, user.id))
         response = await client.post(
             self.refresh_url, data={"refresh_token": refresh_token}
         )
@@ -201,7 +201,7 @@ class TestUsersMe:
         self,
         user: User,
         auth_client: AsyncClient,
-        profile_picture: NamedTemporaryFile,
+        profile_picture: _TemporaryFileWrapper,
     ):
         """Tests logged-in user's image upload method."""
         files = {

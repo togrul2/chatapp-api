@@ -1,12 +1,17 @@
 """DB services for chat related models & routes."""
+from datetime import datetime, timedelta
 from typing import Any, cast
+from urllib import parse
 
-from sqlalchemy import Column, delete, exists, func, select
+from fastapi import HTTPException, status
+from jose import JWTError, jwt
+from sqlalchemy import Boolean, Column, delete, exists, func, select
 from sqlalchemy.engine import Row
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer, joinedload
 
+from src.config import ALGORITHM, CHAT_INVITE_LINK_DURATION, settings
 from src.exceptions.base import NotFound
 from src.exceptions.chat import (
     ChatNameTakenException,
@@ -126,7 +131,7 @@ async def get_messages_from_private_chat(
     user_id: int,
     target_id: int,
     paginator: BasePaginator | None = None,
-) -> PaginatedResponse[MessageRead]:
+) -> PaginatedResponse[MessageRead] | list[Message]:
     """Returns messages from a private chat with a given id."""
     if (chat := await _get_private_chat(session, user_id, target_id)) is None:
         raise NotFound
@@ -182,9 +187,7 @@ async def list_chats(
 
     if keyword:
         expression = keyword.upper() + "%"
-        query = query.where(
-            cast(Column[str], func.upper(Chat.name)).like(expression)
-        )
+        query = query.where(func.upper(Chat.name).like(expression))
 
     if paginator:
         return await paginator.get_paginated_response_for_rows(query)
@@ -214,7 +217,7 @@ async def create_public_chat(
     ).one()
 
 
-async def _get_public_chat(session: AsyncSession, chat_id: int) -> Chat | None:
+async def _get_public_chat(session: AsyncSession, chat_id: int) -> Row | None:
     """Returns public chat with given id.
     Additionally, calculates its number of members"""
     chat_query = await session.execute(
@@ -234,7 +237,7 @@ async def _get_public_chat(session: AsyncSession, chat_id: int) -> Chat | None:
     return chat_query.one_or_none()
 
 
-async def get_public_chat_or_404(session: AsyncSession, chat_id: int) -> Chat:
+async def get_public_chat_or_404(session: AsyncSession, chat_id: int) -> Row:
     """Returns single chat with given id.
     If it does not exists, returns 404 error code."""
     chat = await _get_public_chat(session, chat_id)
@@ -246,7 +249,7 @@ async def get_public_chat_or_404(session: AsyncSession, chat_id: int) -> Chat:
 
 
 async def _check_role(
-    session: AsyncSession, user_id: int, chat_id: int, role: Column[bool]
+    session: AsyncSession, user_id: int, chat_id: int, role: Column[Boolean]
 ) -> bool:
     """Returns whether set user has given role in chat or not."""
     query = (
@@ -305,3 +308,94 @@ async def delete_chat(
     )
     await session.execute(delete(Chat).where(Chat.id == chat.id))
     await session.commit()
+
+
+def _generate_invite_token(chat_id: int) -> str:
+    """Generates invite token for given chat."""
+    expire = datetime.utcnow() + timedelta(seconds=CHAT_INVITE_LINK_DURATION)
+    payload = {
+        "expire": expire.isoformat(),
+        "type": "chat-invitation",
+        "chat_id": chat_id,
+    }
+    encoded_jwt = jwt.encode(payload, settings.secret_key, algorithm=ALGORITHM)
+    return encoded_jwt
+
+
+async def get_invite_link_for_chat(
+    session: AsyncSession, user_id: int, chat_id: int, base_url: str
+) -> str:
+    """Generates invite link for given group.
+    If requesting user is not admin, raises 403 http error."""
+    if not await _is_chat_admin(session, user_id, chat_id):
+        raise UserNotAdminException
+
+    token = _generate_invite_token(chat_id)
+    return parse.urljoin(base_url, f"api/chats/{chat_id}/enroll?t={token}")
+
+
+async def enroll_user_with_token(
+    session: AsyncSession, user_id: int, chat_id: int, token: str
+) -> Membership:
+    """Enrolls user to chat. If token cannot be
+    parsed or expired or is invalid, 400 http error is raised.
+    If user is already in chat, 409 http error is raised."""
+
+    try:
+        body = jwt.decode(token, settings.secret_key, ALGORITHM)
+    except JWTError as exc:
+        raise HTTPException(
+            status_code=400, detail="Token is either invalid or expired."
+        ) from exc
+
+    if not (
+        datetime.fromisoformat(cast(str, body.get("expire")))
+        <= datetime.utcnow()
+        or chat_id != body.get("chat_id")
+        or body.get("chat_id") != "chat-invitation"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token is either invalid or expired.",
+        )
+
+    if await session.scalar(
+        exists()
+        .where(
+            (Membership.chat_id == chat_id) & (Membership.user_id == user_id)
+        )
+        .select()
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You are already enrolled in this chat.",
+        )
+
+    return await base_services.create(
+        session,
+        Membership(
+            chat_id=chat_id,
+            user_id=user_id,
+            is_admin=False,
+            is_owner=False,
+            accepted=True,
+        ),
+    )
+
+
+async def update_membership(
+    session: AsyncSession, chat_id: int, user_id: int, target_id: int, payload
+):
+    return None
+
+
+async def remove_member(
+    session: AsyncSession, chat_id: int, user_id: int, target_id: int
+):
+    return None
+
+
+async def list_chat_messages(
+    session: AsyncSession, chat_id: int, user_id: int
+):
+    return None

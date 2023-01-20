@@ -4,9 +4,9 @@ from typing import Any, TypeVar
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.models.base import Base
+from src.models.base import CustomBase
 
-T = TypeVar("T", Base, Base)
+T = TypeVar("T", bound=CustomBase)
 
 
 async def create(

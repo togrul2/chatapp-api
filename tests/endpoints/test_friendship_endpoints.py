@@ -123,6 +123,5 @@ class TestFriendshipRequestDetail:
 
 
 @pytest.mark.asyncio
-async def test_list_friends(self, auth_client, friendship):
+async def test_list_friends(auth_client, friendship):
     """Tests listing authenticated user's friends."""
-    ...

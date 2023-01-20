@@ -1,4 +1,8 @@
 """Module with user related models."""
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from sqlalchemy import (
     Boolean,
     Column,
@@ -9,9 +13,33 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 
-from src.models.base import Base, CreateTimestampMixin
+from src.models.base import CreateTimestampMixin, CustomBase
 
 __all__ = ["Friendship", "User"]
+
+
+if TYPE_CHECKING:
+    # if the target of the relationship is in another module
+    # that cannot normally be imported at runtime
+    from src.models.chat import Chat
+
+
+class User(CustomBase):
+    """User model for storing user credentials & data."""
+
+    __tablename__ = "user"
+    __repr_fields__ = ("id", "username")
+
+    first_name = Column(String(50))
+    last_name = Column(String(50))
+    username = Column(String(50), unique=True, nullable=False)
+    email = Column(String(50), unique=True, nullable=False)
+    password = Column(String(255), nullable=False)
+    profile_picture = Column(String(255))
+
+    chats: list[Chat] = relationship(
+        "Chat", secondary="membership", back_populates="users"
+    )
 
 
 class Friendship(CreateTimestampMixin):
@@ -29,22 +57,6 @@ class Friendship(CreateTimestampMixin):
     receiver_id = Column(Integer, ForeignKey("user.id"))
     accepted = Column(Boolean)
 
-    sender = relationship("User", foreign_keys="Friendship.sender_id")
-
-
-class User(Base):
-    """User model for storing user credentials & data."""
-
-    __tablename__ = "user"
-    __repr_fields__ = ("id", "username")
-
-    first_name = Column(String(50))
-    last_name = Column(String(50))
-    username = Column(String(50), unique=True, nullable=False)
-    email = Column(String(50), unique=True, nullable=False)
-    password = Column(String(255), nullable=False)
-    profile_picture = Column(String(255))
-
-    chats = relationship(
-        "Chat", secondary="membership", back_populates="users"
+    sender: list[User] = relationship(
+        "User", foreign_keys="Friendship.sender_id"
     )

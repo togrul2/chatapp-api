@@ -11,8 +11,8 @@ BASE_DIR = SRC_DIR.parent
 load_dotenv(BASE_DIR / ".env")
 
 # JWT
-ACCESS_TOKEN_EXPIRE_MINUTES = 30  # 30 minutes
-REFRESH_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 30  # 30 minutes
+REFRESH_TOKEN_EXPIRE_MINUTES = 60 * 60 * 24 * 7  # 7 days
 ALGORITHM = "HS256"
 
 # staticfiles
@@ -22,6 +22,9 @@ STATIC_ROOT = BASE_DIR / "static"
 
 # Pagination
 PAGE_SIZE_DEFAULT = 10
+
+# Chat
+CHAT_INVITE_LINK_DURATION = 60 * 60 * 24  # 24 hours
 
 
 class Settings(BaseSettings):

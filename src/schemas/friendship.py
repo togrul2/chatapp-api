@@ -1,18 +1,14 @@
 """Pydantic validation modelds(schemas) for Friendship related routes."""
 from datetime import datetime
 
-from pydantic import BaseModel
-
+from src.schemas.base import BaseOrmModel
 from src.schemas.user import UserRead
 
 
-class FriendshipBase(BaseModel):
+class FriendshipBase(BaseOrmModel):
     """Base friendship schema"""
 
     receiver_id: int
-
-    class Config:
-        orm_mode = True
 
 
 class FriendshipRead(FriendshipBase):

@@ -7,10 +7,11 @@ import os
 from typing import TypedDict, cast
 
 from fastapi import UploadFile
-from sqlalchemy import Column, delete, exists, select
+from sqlalchemy import delete, exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import authentication
+from src.authentication import password_context
 from src.exceptions.base import NotFound
 from src.exceptions.user import (
     BadCredentialsException,
@@ -109,7 +110,7 @@ async def create_user(session: AsyncSession, schema: UserCreate) -> User:
     """Creates user with hashed password."""
     await _validate_username_uniqueness(session, schema.username)
     await _validate_email_uniqueness(session, schema.email)
-    schema.password = authentication.get_hashed_password(schema.password)
+    schema.password = password_context.hash(schema.password)
     return await base_services.create(session, User(**schema.dict()))
 
 
@@ -125,8 +126,7 @@ async def list_users(
     if keyword:
         expression = keyword + "%"
         query = query.where(
-            cast(Column[str], User.username).like(expression)
-            | cast(Column[str], User.email).like(expression)
+            User.username.like(expression) | User.email.like(expression)
         )
 
     if paginator:
@@ -153,7 +153,7 @@ async def remove_profile_picture(session: AsyncSession, user_id: int) -> User:
     Sets user's profile picture to null and returns updated info.
     It doesn't delete file from storage.
     """
-    user: User = await get_or_404(session, user_id)
+    user = await get_or_404(session, user_id)
     user.profile_picture = None
     await session.commit()
     await session.refresh(user)
@@ -183,25 +183,21 @@ async def authenticate_user(
     user = await _get_by_username(session, username)
 
     if (
-        not user
-        or authentication.verify_password(password, user.password) is False
+        user is None
+        or password_context.verify(password, user.password) is False
     ):
         raise BadCredentialsException
 
-    return _generate_auth_tokens(user.id)
+    return _generate_auth_tokens(cast(int, user.id))
 
 
 async def refresh_tokens(
     session: AsyncSession, refresh_token: str
 ) -> AuthTokens:
     """Returns new access and refresh tokens if refresh token is valid."""
-    user_id = authentication.verify_refresh_token(refresh_token)
-    user = await get_by_id(session, user_id)
-
-    if user is None:
-        raise HTTPBadTokenException
-
-    return _generate_auth_tokens(user.id)
+    user_id, _ = authentication.get_user_id_from_refresh_token(refresh_token)
+    await get_or_401(session, user_id)
+    return _generate_auth_tokens(user_id)
 
 
 async def update_user(
@@ -220,7 +216,7 @@ async def update_user(
     if schema.email:
         await _validate_email_uniqueness(session, schema.email, user_id)
 
-    user = await get_by_id(session, user_id)
+    user = await get_or_404(session, user_id)
     payload = {k: v for k, v in schema.dict().items() if v is not None}
     return await base_services.update(session, user, payload)
 

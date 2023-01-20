@@ -1,34 +1,50 @@
 """Async managers for SQL databases."""
 from abc import ABC, abstractmethod
-from collections.abc import Coroutine, Sequence
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Any
 
-from asyncpg import connect
+from asyncpg import Connection, connect
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from src.db import Base
 
 
+@asynccontextmanager
+async def get_connection(
+    host: str, port: int, user: str, password: str
+) -> AsyncIterator[Connection]:
+    """Context manager for opening database session."""
+    conn = await connect(
+        host=host,
+        port=port,
+        user=user,
+        password=password,
+    )
+    yield conn
+    await conn.close()
+
+
+@dataclass
 class DBSQLAsyncManager(ABC):
     """Abstract class (aka interface) for db managers."""
 
-    @abstractmethod
-    async def get_connection(self):
-        """Context manager which returns async connection.
-        Must be decorated with @asynccontextmanager"""
+    username: str
+    password: str
+    host: str
+    port: int
+    test_db_name: str
 
     @abstractmethod
-    async def run_commands(self, *commands) -> Coroutine[Any, Any, None]:
+    async def _run_commands(self, *commands) -> None:
         """Runs SQL commands in connection."""
 
     @abstractmethod
-    async def create_database(self, db_name: str) -> Coroutine[Any, Any, None]:
+    async def create_database(self) -> None:
         """Creates database with given name."""
 
     @abstractmethod
-    async def drop_database(self, db_name: str) -> Coroutine[Any, Any, None]:
+    async def drop_database(self) -> None:
         """Creates database with given name."""
 
 
@@ -36,50 +52,35 @@ class DBSQLAsyncManager(ABC):
 class PostgreSQLAsyncManager(DBSQLAsyncManager):
     """Asynchronous PostgreSQL connection & management class."""
 
-    username: str
-    password: str
-    host: str
-    port: str
-
-    @asynccontextmanager
-    async def get_connection(self):
-        """Context manager for opening database session."""
-        conn = await connect(
-            user=self.username,
-            host=self.host,
-            port=self.port,
-            password=self.password,
-        )
-        yield conn
-        await conn.close()
-
-    async def run_commands(self, *commands: Sequence[str]) -> None:
+    async def _run_commands(self, *commands: Sequence[str]) -> None:
         """Runs given command in database.
         Raises error if not connection is established"""
 
-        async with self.get_connection() as conn:
+        async with get_connection(
+            self.host, self.port, self.username, self.password
+        ) as conn:
             for command in commands:
                 await conn.execute(*command)
 
-    async def create_database(self, db_name: str) -> None:
+    async def create_database(self) -> None:
         """Creates the given database."""
-        await self.run_commands(
-            (f'CREATE DATABASE "{db_name}" ',),
+        await self._run_commands(
+            (f'CREATE DATABASE "{self.test_db_name}" ',),
         )
         print("Test database created")
 
-    async def drop_database(self, db_name: str) -> None:
+    async def drop_database(self) -> None:
         """Drops the given database."""
 
-        await self.run_commands(
-            (f'ALTER DATABASE "{db_name}" allow_connections = off',),
+        await self._run_commands(
+            (f'ALTER DATABASE "{self.test_db_name}" allow_connections = off',),
             (
                 "SELECT pg_terminate_backend(pg_stat_activity.pid) "
                 "FROM pg_stat_activity "
-                f"WHERE pg_stat_activity.datname = '{db_name}' "
+                f"WHERE pg_stat_activity.datname = '{self.test_db_name}' "
                 "AND pid <> pg_backend_pid()",
             ),
-            (f'DROP DATABASE "{db_name}"',),
+            (f'DROP DATABASE "{self.test_db_name}"',),
         )
         print("Test database dropped")
 

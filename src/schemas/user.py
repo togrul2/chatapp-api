@@ -6,22 +6,20 @@ from urllib import parse
 from pydantic import BaseModel, EmailStr, Field, validator
 
 from src.config import STATIC_DOMAIN
+from src.schemas.base import BaseOrmModel
 
 
-class UserBase(BaseModel):
-    """User schema"""
+class UserBase(BaseOrmModel):
+    """Base schema for User"""
 
     username: str = Field(min_length=6)
     email: EmailStr
     first_name: str = Field(min_length=2)
     last_name: str = Field(min_length=2)
 
-    class Config:
-        orm_mode = True
-
 
 class UserCreate(UserBase):
-    """Pydantic model for validating user create func"""
+    """Schema for validating user create func"""
 
     password: str = Field(
         regex=r"^[A-Z][\w@?!\-$]*$",  # noqa: W605
@@ -36,7 +34,7 @@ class UserCreate(UserBase):
 
 
 class UserRead(UserBase):
-    """Pydantic model for validating public user read."""
+    """Schema for validating public user read."""
 
     id: int = Field(description="id of a user")
     profile_picture: str | None
@@ -50,8 +48,8 @@ class UserRead(UserBase):
         return value
 
 
-class UserPartialUpdate(UserBase):
-    """Pydantic model for validating partial user update fields."""
+class UserPartialUpdate(BaseOrmModel):
+    """Schema for validating partial user update fields."""
 
     username: str | None = Field(min_length=6)
     email: EmailStr | None
@@ -60,7 +58,7 @@ class UserPartialUpdate(UserBase):
 
 
 class TokenData(BaseModel):
-    """Pydantic model for sending user access and refresh tokens."""
+    """Schema for validating payload with user access and refresh tokens."""
 
     access_token: str
     refresh_token: str

@@ -1,14 +1,13 @@
 """Module with Chat API Routes & Websockets"""
 import asyncio
 
-from fastapi import APIRouter, Depends, Form, status
+from fastapi import APIRouter, Depends, Form, Request, WebSocket, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db import broadcaster
 from src.dependencies import (
-    AuthWebSocket,
-    get_auth_websocket,
     get_current_user_id_from_bearer,
+    get_current_user_id_from_cookie,
     get_db,
     get_paginator,
 )
@@ -19,6 +18,8 @@ from src.schemas.chat import (
     ChatRead,
     ChatReadWithMembers,
     ChatUpdate,
+    MembershipBase,
+    MembershipUpdate,
     MessageRead,
 )
 from src.services import chat as chat_services
@@ -29,17 +30,18 @@ router = APIRouter(prefix="/api", tags=["chat"])
 
 @router.websocket("/privates")
 async def private_messages(
-    auth_websocket: AuthWebSocket = Depends(get_auth_websocket),
+    websocket: WebSocket,
+    user_id: int = Depends(get_current_user_id_from_cookie),
     session: AsyncSession = Depends(get_db),
 ):
     """Websocket for sending and receiving private messages."""
-    await auth_websocket.accept()
-    manager = PrivateMessageManager(broadcaster, session)
+    await websocket.accept()
+    manager = PrivateMessageManager(broadcaster, session, user_id)
 
     await asyncio.wait(
         [
-            asyncio.create_task(manager.receiver(auth_websocket)),
-            asyncio.create_task(manager.sender(auth_websocket)),
+            asyncio.create_task(manager.receiver(websocket)),
+            asyncio.create_task(manager.sender(websocket)),
         ],
         return_when=asyncio.FIRST_COMPLETED,
     )
@@ -50,7 +52,7 @@ async def private_messages(
     response_model=PaginatedResponse[MessageRead],
     responses={
         status.HTTP_404_NOT_FOUND: {
-            "detail": DetailMessage,
+            "model": DetailMessage,
             "description": "Chat with target user does not exist.",
         }
     },
@@ -158,28 +160,91 @@ async def delete_public_chat(
     await chat_services.delete_chat(session, user_id, chat_id)
 
 
-@router.post("/chats/{chat_id}/invite-link")
-def get_invite_link_for_chat(chat_id: int):
+@router.post(
+    "/chats/{chat_id}/invite-link",
+    response_model=str,
+    responses={
+        status.HTTP_403_FORBIDDEN: {
+            "model": DetailMessage,
+            "description": "Authenticated user is not chat admin.",
+        }
+    },
+)
+async def get_invite_link_for_chat(
+    chat_id: int,
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+    user_id: int = Depends(get_current_user_id_from_bearer),
+):
     """Generates and returns invite link for chat with expiration link."""
+    return await chat_services.get_invite_link_for_chat(
+        session, user_id, chat_id, str(request.base_url)
+    )
 
 
-@router.post("/chats/{chat_id}/enroll")
-def enroll_into_chat(chat_id: int, token: str = Form()):
+@router.post(
+    "/chats/{chat_id}/enroll",
+    response_model=MembershipBase,
+    responses={
+        status.HTTP_400_BAD_REQUEST: {
+            "model": DetailMessage,
+            "description": "Token is invalid or expired.",
+        },
+        status.HTTP_409_CONFLICT: {
+            "model": DetailMessage,
+            "description": "User is already enrolled into the chat.",
+        },
+    },
+)
+async def enroll_into_chat(
+    chat_id: int,
+    token: str = Form(alias="t"),
+    session: AsyncSession = Depends(get_db),
+    user_id: int = Depends(get_current_user_id_from_bearer),
+):
     """Enrolls user into chat.
     If token is expired or incorrect returns 400 error code."""
+    return await chat_services.enroll_user_with_token(
+        session, user_id, chat_id, token
+    )
 
 
 @router.patch("/chats/{chat_id}/users/{target_id}")
-def update_user_membership(chat_id: int, target_id: int):
+async def update_user_membership(
+    chat_id: int,
+    target_id: int,
+    payload: MembershipUpdate,
+    session: AsyncSession = Depends(get_db),
+    user_id: int = Depends(get_current_user_id_from_bearer),
+):
     """Updates user membership info in chat (is_admin).
     If non admin user, returns 403 error code."""
+    return await chat_services.update_membership(
+        session, chat_id, user_id, target_id, payload
+    )
 
 
 @router.delete("/chats/{chat_id}/users/{target_id}")
-def remove_user_from_chat(chat_id: int, target_id: int):
+async def remove_user_from_chat(
+    chat_id: int,
+    target_id: int,
+    session: AsyncSession = Depends(get_db),
+    user_id: int = Depends(get_current_user_id_from_bearer),
+):
     """Removes user from chat. If non admin user, returns 403 error code."""
+    await chat_services.remove_member(session, chat_id, user_id, target_id)
 
 
 @router.get("/chats/{chat_id}/messages")
-def list_chat_messages(chat_id: int):
+async def list_chat_messages(
+    chat_id: int,
+    session: AsyncSession = Depends(get_db),
+    user_id: int = Depends(get_current_user_id_from_bearer),
+):
     """Lists chat messages."""
+    return await chat_services.list_chat_messages(session, chat_id, user_id)
+
+
+@router.get("/chats/{chat_id}/members")
+async def list_chat_members(chat_id: int):
+    ...

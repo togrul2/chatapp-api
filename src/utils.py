@@ -1,6 +1,7 @@
 """Miscellaneous utils for project."""
 import re
 from collections.abc import Sequence
+from typing import TypedDict
 from urllib import parse
 
 
@@ -21,14 +22,36 @@ def split_filename(file: str) -> tuple[str, str]:
     return filename, ext
 
 
-def parse_url(url: str) -> dict[str, str]:
-    """Parses url and returns parameters from it."""
+class ParsedDBUrl(TypedDict):
+    """Typed dict with keys of parsed url."""
 
+    hostname: str
+    port: int
+    user: str | None
+    password: str | None
+    dbname: str
+
+
+def parse_url(url: str) -> ParsedDBUrl:
+    """Parses url and returns parameters from it."""
     params = parse.urlparse(url)
+
+    hostname = params.hostname
+    port = params.port
+    user = params.username
+    password = params.password
+    dbname = params.path[1:]
+
+    if not hostname:
+        raise ValueError("Invalid hostname, make sure passed url is correct.")
+
+    if not port:
+        raise ValueError("Invalid port, make sure passed url is correct.")
+
     return {
-        "hostname": params.hostname,
-        "port": params.port,
-        "user": params.username,
-        "password": params.password,
-        "dbname": params.path[1:],
+        "hostname": hostname,
+        "port": port,
+        "user": user,
+        "password": password,
+        "dbname": dbname,
     }

@@ -4,23 +4,24 @@ Config and fixtures for tests.
 import asyncio
 import os
 import shutil
+from typing import cast
 
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
-from httpx import AsyncClient
+from httpx import AsyncClient, Headers
 from sqlalchemy import delete, update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-from src import authentication
+from src.authentication import create_access_token, password_context
 from src.config import BASE_DIR, settings
 from src.dependencies import get_db, get_staticfiles_manager
 from src.main import app as fastapi_app
 from src.models.user import Friendship, User
 from src.staticfiles import LocalStaticFilesManager
 from src.utils import parse_url
-from tests.async_sql import (
+from tests.db_managers import (
     DBSQLAsyncManager,
     PostgreSQLAsyncManager,
     create_tables,
@@ -41,7 +42,11 @@ test_db_url = (
 )
 
 dbms_session: DBSQLAsyncManager = PostgreSQLAsyncManager(
-    db_user, db_password, db_hostname, db_port
+    cast(str, db_user),
+    cast(str, db_password),
+    cast(str, db_hostname),
+    cast(int, db_port),
+    test_db_name,
 )
 
 
@@ -70,12 +75,12 @@ def event_loop():
 async def setup_teardown():
     """Sets up database and local static files manager.
     Tears down after pytest session is over."""
-    await dbms_session.create_database(test_db_name)
+    await dbms_session.create_database()
     await create_tables(test_engine)
     os.mkdir(TEST_STATIC_ROOT)
     yield
     await drop_tables(test_engine)
-    await dbms_session.drop_database(test_db_name)
+    await dbms_session.drop_database()
     shutil.rmtree(TEST_STATIC_ROOT)
 
 
@@ -118,15 +123,15 @@ def client(test_app: FastAPI):
 @pytest_asyncio.fixture()
 async def auth_client(user: User, client: AsyncClient):
     """Client of authorized user for testings endpoints."""
-    access_token = authentication.create_access_token(user.id)
-    client.headers = {"Authorization": f"Bearer {access_token}"}
+    access_token = create_access_token(cast(int, user.id))
+    client.headers = Headers({"Authorization": f"Bearer {access_token}"})
     yield client
 
 
 @pytest_asyncio.fixture()
 async def user(session: AsyncSession):
     """Fixture for generating user"""
-    password = authentication.get_hashed_password("Testpassword")
+    password = password_context.hash("Testpassword")
     user_model = User(
         username="johndoe",
         email="johndoe@example.com",
@@ -145,7 +150,7 @@ async def user(session: AsyncSession):
 @pytest_asyncio.fixture()
 async def sender_user(session: AsyncSession):
     """User for sending friendship request to another one."""
-    password = authentication.get_hashed_password("Testpassword")
+    password = password_context.hash("Testpassword")
     user_model = User(
         username="peterdoe",
         email="peterdoe@example.com",
@@ -162,7 +167,9 @@ async def sender_user(session: AsyncSession):
 
 
 @pytest_asyncio.fixture()
-async def friendship_request(user: User, sender_user: User, session):
+async def friendship_request(
+    user: User, sender_user: User, session: AsyncSession
+):
     """Friendship request model fixture."""
 
     friendship_model = Friendship(

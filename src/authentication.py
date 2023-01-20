@@ -2,8 +2,7 @@
 Authentication module with all stuff related to authentication via jwt.
 """
 from datetime import datetime, timedelta
-from enum import IntEnum
-from functools import partial
+from enum import Enum
 
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
@@ -15,87 +14,82 @@ from src.config import (
     REFRESH_TOKEN_EXPIRE_MINUTES,
     settings,
 )
-from src.exceptions.user import HTTPBadTokenException
 
 password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/token")
 
 
-class TokenType(IntEnum):
+class AuthTokens(str, Enum):
     """Enum class with authentication token types"""
 
-    ACCESS = 1
-    REFRESH = 2
+    ACCESS = "auth-access"
+    REFRESH = "aut-refresh"
 
 
-def get_hashed_password(password: str) -> str:
-    """Hashes the password."""
-    return password_context.hash(password)
-
-
-def verify_password(password: str, hashed_pass: str) -> bool:
-    """Compares raw and hashed passwords."""
-    return password_context.verify(password, hashed_pass)
-
-
-def _create_token(type_: int, expires_delta: timedelta, user_id: int) -> str:
+def _create_auth_token(
+    type_: AuthTokens, expires_delta: timedelta, user_id: int
+) -> str:
     """
-    Base function for creating tokens with given type,
-    user_id and expiration time.
+    Base function for creating authentication tokens
+    (either access or refresh), for given user_id and expiration time.
     """
     expire = datetime.utcnow() + expires_delta
-    to_encode = {
+    payload = {
         "user_id": user_id,
         "expire": expire.isoformat(),
         "type": type_,
     }
-    encoded_jwt = jwt.encode(
-        to_encode, settings.secret_key, algorithm=ALGORITHM
-    )
+    encoded_jwt = jwt.encode(payload, settings.secret_key, algorithm=ALGORITHM)
     return encoded_jwt
 
 
-create_access_token = partial(
-    _create_token,
-    TokenType.ACCESS,
-    timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
-)
-create_refresh_token = partial(
-    _create_token,
-    TokenType.REFRESH,
-    timedelta(minutes=REFRESH_TOKEN_EXPIRE_MINUTES),
-)
+def create_access_token(user_id: int) -> str:
+    """Creates access token for given user id."""
+    return _create_auth_token(
+        AuthTokens.ACCESS,
+        timedelta(seconds=ACCESS_TOKEN_EXPIRE_MINUTES),
+        user_id,
+    )
 
 
-def get_user_from_token(
-    token_type: int, exception: BaseException, token: str
-) -> int:
+def create_refresh_token(user_id: int) -> str:
+    """Creates refresh token for given user id."""
+    return _create_auth_token(
+        AuthTokens.REFRESH,
+        timedelta(seconds=REFRESH_TOKEN_EXPIRE_MINUTES),
+        user_id,
+    )
+
+
+def get_user_id_from_token(
+    token_type: AuthTokens, token: str
+) -> tuple[int, str]:
     """Base function for retrieving user's id from token.
     Raises given exception if token is incorrect or expired."""
+    error_msg = "Given token is either invalid or expired."
+
     try:
-        payload: dict[str, str] = jwt.decode(
+        payload = jwt.decode(
             token, settings.secret_key, algorithms=[ALGORITHM]
         )
-        curr_date = payload.get("expire")
-        type_ = payload.get("type")
+
         user_id = payload.get("user_id")
 
         if (
-            not curr_date
+            not (curr_date := payload.get("expire"))
             or datetime.fromisoformat(curr_date) <= datetime.utcnow()
-            or type_ != token_type
+            or payload.get("type") != token_type
             or not user_id
         ):
-            # FIXME: think of better handling
-            raise exception
+            return 0, error_msg
 
-        return int(user_id)
+        return user_id, ""
 
-    except JWTError as exc:
-        raise exception from exc
+    except JWTError:
+        return 0, error_msg
 
 
-verify_refresh_token = partial(
-    get_user_from_token, TokenType.REFRESH, HTTPBadTokenException
-)
+def get_user_id_from_refresh_token(token: str):
+    """Retrieves user from refresh token"""
+    return get_user_id_from_token(AuthTokens.REFRESH, token)

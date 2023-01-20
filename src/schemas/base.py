@@ -5,13 +5,20 @@ from pydantic import BaseModel
 from pydantic.generics import GenericModel
 
 
+class BaseOrmModel(BaseModel):
+    """Base pydantic model with configuration for orm."""
+
+    class Config:
+        orm_mode = True
+
+
 class DetailMessage(BaseModel):
     """Detail schema for error messages."""
 
     detail: str
 
 
-T = TypeVar("T", int, str)
+T = TypeVar("T", bound=BaseOrmModel)
 
 
 class PaginatedResponse(GenericModel, Generic[T]):
@@ -22,3 +29,6 @@ class PaginatedResponse(GenericModel, Generic[T]):
     total_records: int
     current_page: int
     items_per_page: int
+
+    class Config:
+        orm_mode = True
