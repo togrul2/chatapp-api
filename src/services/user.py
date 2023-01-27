@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import authentication
 from src.authentication import password_context
-from src.exceptions.base import NotFound
+from src.exceptions.base import http_404_not_found
 from src.exceptions.user import (
     BadCredentialsException,
     EmailAlreadyTaken,
@@ -90,7 +90,7 @@ async def get_or_404(session: AsyncSession, user_id: int) -> User:
     user = await get_by_id(session, user_id)
 
     if user is None:
-        raise NotFound
+        raise http_404_not_found("User with given id has not been found.")
 
     return user
 
@@ -101,7 +101,9 @@ async def get_by_username_or_404(session: AsyncSession, username: str) -> User:
     user = await _get_by_username(session, username)
 
     if user is None:
-        raise NotFound
+        raise http_404_not_found(
+            "User with given username has not been found."
+        )
 
     return user
 

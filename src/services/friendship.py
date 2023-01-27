@@ -3,7 +3,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer, joinedload
 
-from src.exceptions.base import NotFound
+from src.exceptions.base import http_404_not_found
 from src.exceptions.friendship import RequestAlreadySent, RequestWithYourself
 from src.models.user import Friendship, User
 from src.paginator import BasePaginator
@@ -36,14 +36,13 @@ async def list_pending_friendships(
 
 async def list_friends(
     session: AsyncSession, user_id: int, paginator: BasePaginator | None = None
-) -> list[Friendship] | PaginatedResponse[UserRead]:
+) -> list[User] | PaginatedResponse[UserRead]:
     """List of all friends user has."""
     sent_query = (
         select(User)
         .join(Friendship, User.id == Friendship.receiver_id)
         .where(
-            (Friendship.sender_id == Friendship.id)
-            & (Friendship.receiver_id == user_id)
+            (Friendship.sender_id == user_id)
             & (Friendship.accepted == True)  # noqa: E712
         )
     )
@@ -52,16 +51,15 @@ async def list_friends(
         select(User)
         .join(Friendship, User.id == Friendship.sender_id)
         .where(
-            (Friendship.receiver_id == Friendship.id)
-            & (Friendship.sender_id == user_id)
+            (Friendship.receiver_id == user_id)
             & (Friendship.accepted == True)  # noqa: E712
         )
     )
 
-    query = select(Friendship).from_statement(sent_query.union(received_query))
+    query = sent_query.union(received_query)
 
     if paginator:
-        return await paginator.get_paginated_response_for_model(query)
+        return await paginator.get_paginated_response_for_rows(query)
 
     return (await session.scalars(query)).all()
 
@@ -108,7 +106,9 @@ async def get_friendship_with_user_or_404(
             session, user_id, target_id
         )
     ) is None:
-        raise NotFound
+        raise http_404_not_found(
+            "Friendship with given user has not been found."
+        )
     return friendship
 
 
@@ -124,7 +124,9 @@ async def get_friendship_request_with_user_or_404(
             session, user_id, target_id
         )
     ) is None:
-        raise NotFound
+        raise http_404_not_found(
+            "Friendship request with given user has not been found."
+        )
     return friendship
 
 

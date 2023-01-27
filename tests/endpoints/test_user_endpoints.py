@@ -93,7 +93,9 @@ class TestRegisterUser:
 class TestToken:
     """Test token and refresh endpoint."""
 
-    token_url = "/api/token"
+    token_url = (
+        "/api/token"  # nosec - ✅ token is a part of url, not a password
+    )
     refresh_url = "/api/refresh"
 
     async def test_token_success(self, client: AsyncClient, user: User):
@@ -270,11 +272,10 @@ class TestListUsers:
 class TestRetrieveUser:
     """Tests user detail endpoints."""
 
-    url = "api/users/"
-
-    def get_url(self, username: str):
+    @staticmethod
+    def get_url(username: str):
         """Returns url for user with given username."""
-        return self.url + username
+        return f"api/users/{username}"
 
     async def test_retrieve_user(self, client: AsyncClient, user: User):
         """Tests user detail endpoint."""

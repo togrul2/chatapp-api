@@ -6,3 +6,5 @@ exclude =
     .venv,
     alembic
     __init__.py
+
+skip=S101

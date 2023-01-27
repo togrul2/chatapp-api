@@ -15,7 +15,7 @@ from sqlalchemy.orm import relationship
 
 from src.models.base import CreateTimestampMixin, CustomBase
 
-__all__ = ["Friendship", "User"]
+__all__ = ["Friendship", "User", "Block"]
 
 
 if TYPE_CHECKING:
@@ -57,6 +57,21 @@ class Friendship(CreateTimestampMixin):
     receiver_id = Column(Integer, ForeignKey("user.id"))
     accepted = Column(Boolean)
 
-    sender: list[User] = relationship(
-        "User", foreign_keys="Friendship.sender_id"
+    sender: User = relationship("User", foreign_keys="Friendship.sender_id")
+
+
+class Block(CustomBase):
+    """Block model for recording blocked users."""
+
+    __tablename__ = "block"
+    __table_args__ = (
+        UniqueConstraint(
+            "blocker_id", "blocked_id", name="unique_blocker_blocked_id"
+        ),
     )
+    __repr_fields__ = ("id", "blocker_id", "blocked_id")
+
+    blocker_id = Column(Integer, ForeignKey("user.id"))
+    blocked_id = Column(Integer, ForeignKey("user.id"))
+
+    blocked_user: User = relationship("User", foreign_keys="Block.blocked_id")

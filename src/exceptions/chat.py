@@ -1,7 +1,11 @@
 """Chat model related exceptions."""
-from functools import partial
-
 from fastapi import HTTPException, WebSocketException, status
+
+WebSocketChatDoesNotExist = WebSocketException(
+    code=status.WS_1008_POLICY_VIOLATION,
+    reason="Chat does not exist",
+)
+
 
 WebSocketBadTokenException = WebSocketException(
     code=status.WS_1008_POLICY_VIOLATION,
@@ -23,4 +27,7 @@ UserNotOwnerException = HTTPException(
     detail="This action is only available for chat owner.",
 )
 
-UserDoesNotExist = partial(HTTPException, status.HTTP_404_NOT_FOUND)
+UserNotMemberException = HTTPException(
+    status_code=status.HTTP_403_FORBIDDEN,
+    detail="This action is only available for chat members.",
+)

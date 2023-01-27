@@ -10,7 +10,7 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import AsyncClient, Headers
-from sqlalchemy import delete, update
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -184,13 +184,14 @@ async def friendship_request(
 
 
 @pytest_asyncio.fixture()
-async def friendship(session: AsyncSession, friendship_request: Friendship):
+async def friendship(user: User, sender_user: User, session: AsyncSession):
     """Friendship fixture between user and sender_user."""
-    query = (
-        update(Friendship)
-        .where(Friendship.id == friendship_request.id)
-        .values(accepted=True)
+    friendship_model = Friendship(
+        receiver_id=user.id, sender_id=sender_user.id, accepted=True
     )
-    await session.execute(query)
+    session.add(friendship_model)
     await session.commit()
-    yield friendship_request
+    target_id = friendship_model.id
+    yield friendship_model
+    await session.execute(delete(Friendship).where(Friendship.id == target_id))
+    await session.commit()

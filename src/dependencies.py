@@ -1,7 +1,7 @@
 """Module with FastAPI dependencies."""
 from collections.abc import AsyncIterator
 
-from fastapi import Cookie, Depends, Query
+from fastapi import Cookie, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.authentication import (
@@ -40,7 +40,7 @@ def get_current_user_id_from_bearer(
     access_token: str = Depends(oauth2_scheme),
 ) -> int:
     """
-    Dependency for getting logged user's id from `authorization` header.
+    Dependency for getting logged user's id from `Authorization` header.
     Returns 401 if unauthenticated.
     """
     user_id, err = get_user_id_from_token(AuthTokens.ACCESS, access_token)
@@ -65,9 +65,10 @@ def get_current_user_id_from_cookie(access_token: str = Cookie()) -> int:
 
 
 def get_paginator(
+    request: Request,
     page: int = Query(default=1),
     page_size: int = Query(default=PAGE_SIZE_DEFAULT),
     session: AsyncSession = Depends(get_db),
 ):
     """Returns pagination with page and page size query params."""
-    return LimitOffsetPaginator(session, page, page_size)
+    return LimitOffsetPaginator(session, page, page_size, request)

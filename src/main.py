@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from src.config import BASE_DIR, STATIC_URL
+from src.config import STATIC_ROOT, STATIC_URL
 from src.db import broadcaster, ping_redis_database, ping_sql_database
 from src.routes.chat import router as chat_router
 from src.routes.friendship import router as friendship_router
@@ -28,7 +28,7 @@ app = FastAPI(
 
 app.mount(
     STATIC_URL,
-    StaticFiles(directory=BASE_DIR / "static"),
+    StaticFiles(directory=STATIC_ROOT),
     name="static",
 )
 

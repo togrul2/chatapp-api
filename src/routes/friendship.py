@@ -125,7 +125,7 @@ async def delete_friendship(
 
 
 @router.get("/friends", response_model=PaginatedResponse[UserRead])
-async def get_friends(
+async def list_friends(
     user_id: int = Depends(get_current_user_id_from_bearer),
     session: AsyncSession = Depends(get_db),
     paginator: BasePaginator = Depends(get_paginator),

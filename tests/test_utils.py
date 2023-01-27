@@ -15,7 +15,7 @@ from src import utils
             r"C:\Windows\Temp\some_file.txt",
             ("C:", "Windows", "Temp", "some_file.txt"),
         ),
-        ("/tmp/some_file.txt", ("tmp", "some_file.txt")),
+        ("/home/user/some_file.txt", ("home", "user", "some_file.txt")),
     ],
 )
 def test_split_path(path, expected):

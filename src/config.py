@@ -18,7 +18,7 @@ ALGORITHM = "HS256"
 # staticfiles
 STATIC_DOMAIN = "http://localhost:8000"
 STATIC_URL = "/static/"
-STATIC_ROOT = BASE_DIR / "static"
+STATIC_ROOT = BASE_DIR / "media"
 
 # Pagination
 PAGE_SIZE_DEFAULT = 10
@@ -32,7 +32,7 @@ class Settings(BaseSettings):
 
     secret_key: str
     database_url: str
-    redis_url: str
+    messaging_url: str
 
 
-settings = Settings()  # type: ignore
+settings = Settings()

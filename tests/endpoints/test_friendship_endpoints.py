@@ -3,9 +3,11 @@ from typing import cast
 
 import pytest
 from fastapi import status
+from httpx import AsyncClient
 from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.models.user import Friendship
+from src.models.user import Friendship, User
 
 
 @pytest.mark.asyncio
@@ -14,12 +16,17 @@ class TestFriendshipRequestList:
 
     url = "/api/friendship/requests"
 
-    async def test_get_pending_requests(self, auth_client, friendship_request):
+    async def test_get_pending_requests(
+        self, auth_client: AsyncClient, friendship_request: Friendship
+    ):
         """Test friendship requests listing endpoint"""
         response = await auth_client.get(self.url)
         body = response.json()
 
-        assert response.status_code == status.HTTP_200_OK
+        assert (
+            response.status_code == status.HTTP_200_OK
+        ), "Status code is not successful."
+        assert len(body["results"]) == 1
         assert friendship_request.id == body["results"][0]["id"]
 
 
@@ -31,12 +38,16 @@ class TestFriendshipRequestDetail:
     """
 
     @staticmethod
-    def get_url(target_id: int):
+    def get_url(target_id: int) -> str:
         """Returns url for target user's friendship."""
         return f"/api/friendship/requests/users/{target_id}"
 
     async def test_get_friendship_request(
-        self, user, sender_user, auth_client, friendship_request
+        self,
+        user: User,
+        sender_user: User,
+        auth_client: AsyncClient,
+        friendship_request: Friendship,
     ):
         """Test getting friendship request."""
         response = await auth_client.get(
@@ -51,7 +62,11 @@ class TestFriendshipRequestDetail:
         assert body["accepted"] is None
 
     async def test_send_friendship_request(
-        self, user, sender_user, auth_client, session
+        self,
+        user: User,
+        sender_user: User,
+        auth_client: AsyncClient,
+        session: AsyncSession,
     ):
         """Test sending friendship request to a target user."""
         response = await auth_client.post(
@@ -84,7 +99,11 @@ class TestFriendshipRequestDetail:
         await session.commit()
 
     async def test_reject_friendship_request(
-        self, sender_user, auth_client, friendship_request, session
+        self,
+        sender_user: User,
+        auth_client: AsyncClient,
+        friendship_request: Friendship,
+        session: AsyncSession,
     ):
         """Test rejecting friendship request from a target user."""
         # target id must be preserved
@@ -103,7 +122,11 @@ class TestFriendshipRequestDetail:
         ), "Friendship is not deleted after rejection"
 
     async def test_accept_friendship_request(
-        self, sender_user, auth_client, friendship_request, session
+        self,
+        sender_user: User,
+        auth_client: AsyncClient,
+        friendship_request: Friendship,
+        session: AsyncSession,
     ):
         """Test accepting friendship request from a target user."""
         response = await auth_client.patch(
@@ -123,5 +146,11 @@ class TestFriendshipRequestDetail:
 
 
 @pytest.mark.asyncio
-async def test_list_friends(auth_client, friendship):
+async def test_list_friends(auth_client: AsyncClient, friendship: Friendship):
     """Tests listing authenticated user's friends."""
+    response = await auth_client.get("/api/friendship/friends")
+    body = response.json()
+
+    assert response.status_code == status.HTTP_200_OK
+    assert len(body["results"]) == 1
+    assert body["results"][0]["id"] == friendship.sender_id

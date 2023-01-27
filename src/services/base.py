@@ -16,7 +16,6 @@ async def create(
     session.add(item)
 
     if flush:
-        print("flushing")
         await session.flush()
 
     if commit:

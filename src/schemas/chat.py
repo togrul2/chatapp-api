@@ -87,5 +87,6 @@ class MembershipUpdate(BaseOrmModel):
 class MemberRead(UserRead):
     """Schema for validating user data for chat members list."""
 
+    chat_id: int
     is_admin: bool
     is_owner: bool

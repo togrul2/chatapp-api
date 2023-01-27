@@ -38,7 +38,7 @@ class Message(CreateTimestampMixin, CustomBase):
     sender_id = Column(Integer, ForeignKey("user.id"))
     chat_id = Column(Integer, ForeignKey("chat.id"))
 
-    sender: list[User] = relationship("User", backref="messages")
+    sender: User = relationship("User", backref="messages")
 
 
 class Chat(CreateTimestampMixin, CustomBase):

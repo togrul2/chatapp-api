@@ -1,61 +1,94 @@
 """DB services for chat related models & routes."""
+from collections.abc import Mapping
 from datetime import datetime, timedelta
-from typing import Any, cast
+from typing import Any, TypedDict, cast
 from urllib import parse
 
 from fastapi import HTTPException, status
 from jose import JWTError, jwt
-from sqlalchemy import Boolean, Column, delete, exists, func, select
+from sqlalchemy import Boolean, Column, delete, exists, func, select, update
 from sqlalchemy.engine import Row
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer, joinedload
+from typing_extensions import NotRequired
 
 from src.config import ALGORITHM, CHAT_INVITE_LINK_DURATION, settings
-from src.exceptions.base import NotFound
+from src.exceptions.base import http_404_not_found
 from src.exceptions.chat import (
     ChatNameTakenException,
-    UserDoesNotExist,
     UserNotAdminException,
+    UserNotMemberException,
     UserNotOwnerException,
 )
 from src.models.chat import Chat, Membership, Message
+from src.models.user import User
 from src.paginator import BasePaginator
 from src.schemas.base import PaginatedResponse
 from src.schemas.chat import (
     ChatCreate,
     ChatReadWithMembers,
     ChatUpdate,
+    MemberRead,
     MessageRead,
 )
 from src.services import base as base_services
 
+user_membership_join_fields = (
+    User.id,
+    User.username,
+    User.email,
+    User.first_name,
+    User.last_name,
+    User.profile_picture,
+    Membership.is_owner,
+    Membership.is_admin,
+    Membership.chat_id,
+)
+
+
+class MemberCreateDict(TypedDict):
+    id: int
+    is_admin: bool
+
+
+class ChatCreateDict(TypedDict):
+    private: bool
+    users: list[MemberCreateDict]
+    name: NotRequired[str]
+
 
 async def _create_chat(
     session: AsyncSession,
-    schema_dict: dict[str, Any],
+    schema_dict: ChatCreateDict,
     user_id: int | None = None,
 ) -> Chat:
     """Custom create method for chat model."""
-    payload: dict[str, Any] = {**schema_dict, "private": False}
     users = list(
-        filter(lambda user: user["id"] != user_id, payload.pop("users"))
+        filter(lambda user: user["id"] != user_id, schema_dict["users"])
     )
-
     chat = await base_services.create(
-        session, Chat(**payload), commit=False, flush=True
-    )
-    await base_services.create(
         session,
-        Membership(
-            user_id=user_id,
-            chat_id=chat.id,
-            is_owner=True,
-            is_admin=True,
-            accepted=True,
+        Chat(
+            private=schema_dict["private"], name=schema_dict.get("name", None)
         ),
         commit=False,
+        flush=True,
     )
+
+    if user_id is not None:
+        await base_services.create(
+            session,
+            Membership(
+                user_id=user_id,
+                chat_id=chat.id,
+                is_owner=True,
+                is_admin=True,
+                accepted=True,
+            ),
+            commit=False,
+        )
+
     for user_dict in users:
         try:
             await base_services.create(
@@ -73,7 +106,7 @@ async def _create_chat(
 
         except IntegrityError as exc:
             await session.rollback()
-            raise UserDoesNotExist(
+            raise http_404_not_found(
                 f"User with id of {user_dict['id']} does not exist."
             ) from exc
 
@@ -110,7 +143,14 @@ async def get_or_create_private_chat(
 
     if chat is None:
         return await _create_chat(
-            session, {"private": True, "users": [user1_id, user2_id]}
+            session,
+            {
+                "private": True,
+                "users": [
+                    {"id": user1_id, "is_admin": True},
+                    {"id": user2_id, "is_admin": True},
+                ],
+            },
         )
 
     return chat
@@ -126,7 +166,7 @@ async def create_message(
     )
 
 
-async def get_messages_from_private_chat(
+async def list_private_chat_messages(
     session: AsyncSession,
     user_id: int,
     target_id: int,
@@ -134,7 +174,9 @@ async def get_messages_from_private_chat(
 ) -> PaginatedResponse[MessageRead] | list[Message]:
     """Returns messages from a private chat with a given id."""
     if (chat := await _get_private_chat(session, user_id, target_id)) is None:
-        raise NotFound
+        raise http_404_not_found(
+            "Private chat with given user has not been found."
+        )
 
     query = (
         select(Message)
@@ -200,7 +242,11 @@ async def create_public_chat(
 ) -> Row:
     """Creates chat with membership to a given user."""
     await _validate_not_null_unique_chat_name(session, schema.name)
-    chat = await _create_chat(session, schema.dict(), user_id)
+    chat = await _create_chat(
+        session,
+        cast(ChatCreateDict, {**schema.dict(), "private": False}),
+        user_id,
+    )
 
     return (
         await session.execute(
@@ -217,7 +263,9 @@ async def create_public_chat(
     ).one()
 
 
-async def _get_public_chat(session: AsyncSession, chat_id: int) -> Row | None:
+async def _get_public_chat_with_members(
+    session: AsyncSession, chat_id: int
+) -> Row | None:
     """Returns public chat with given id.
     Additionally, calculates its number of members"""
     chat_query = await session.execute(
@@ -237,55 +285,88 @@ async def _get_public_chat(session: AsyncSession, chat_id: int) -> Row | None:
     return chat_query.one_or_none()
 
 
-async def get_public_chat_or_404(session: AsyncSession, chat_id: int) -> Row:
-    """Returns single chat with given id.
-    If it does not exists, returns 404 error code."""
-    chat = await _get_public_chat(session, chat_id)
+async def get_public_chat_or_1008(session: AsyncSession, chat_id: int) -> Chat:
+    """Returns single row with chat info with given id.
+    If it does not exist, returns 404 error code."""
+
+
+async def get_public_chat_or_404(session: AsyncSession, chat_id: int) -> Chat:
+    """Returns single row with chat info with given id.
+    If it does not exist, returns 404 error code."""
+    chat = await session.get(Chat, chat_id)
 
     if chat is None:
-        raise NotFound
+        raise http_404_not_found(
+            "Public chat with given id has not been found."
+        )
 
     return chat
 
 
-async def _check_role(
-    session: AsyncSession, user_id: int, chat_id: int, role: Column[Boolean]
-) -> bool:
-    """Returns whether set user has given role in chat or not."""
-    query = (
-        exists()
-        .where(
-            (Membership.chat_id == chat_id)
-            & (Membership.user_id == user_id)
-            & (role == True)  # noqa: E712
+async def get_public_chat_with_members_or_404(
+    session: AsyncSession, chat_id: int
+) -> Row:
+    """Returns single row with chat info with given id
+    and number of its members. If it does not exist,
+    returns 404 error code."""
+    chat = await _get_public_chat_with_members(session, chat_id)
+
+    if chat is None:
+        raise http_404_not_found(
+            "Public chat with given id has not been found."
         )
-        .select()
+
+    return chat
+
+
+async def _check_chat_member(
+    session: AsyncSession,
+    user_id: int,
+    chat_id: int,
+    role: Column[Boolean] | None = None,
+) -> bool:
+    """Returns whether set user is member of chat and
+    has given role(optional) or not."""
+    query = exists().where(
+        (Membership.chat_id == chat_id) & (Membership.user_id == user_id)
     )
-    return await session.scalar(query)
+
+    if role:
+        query = query.where(role == True)  # noqa: E712
+
+    return await session.scalar(query.select())
 
 
 async def _is_chat_admin(
     session: AsyncSession, user_id: int, chat_id: int
 ) -> bool:
-    """Returns whether set user is given chat's admin or not."""
-    return await _check_role(session, user_id, chat_id, Membership.is_admin)
+    """Returns whether given user is chat's admin or not."""
+    return await _check_chat_member(
+        session, user_id, chat_id, Membership.is_admin
+    )
 
 
 async def _is_chat_owner(
     session: AsyncSession, user_id: int, chat_id: int
 ) -> bool:
-    """Returns whether set user is given chat's admin or not."""
-    return await _check_role(session, user_id, chat_id, Membership.is_owner)
+    """Returns whether given user is chat's admin or not."""
+    return await _check_chat_member(
+        session, user_id, chat_id, Membership.is_owner
+    )
+
+
+async def is_chat_member(
+    session: AsyncSession, user_id: int, chat_id: int
+) -> bool:
+    """Returns whether given user is chat's member or not."""
+    return await _check_chat_member(session, user_id, chat_id)
 
 
 async def update_chat(
     session: AsyncSession, user_id: int, chat_id: int, payload: ChatUpdate
 ) -> Chat:
     """Updates chat's information."""
-    chat = await session.get(Chat, chat_id)
-
-    if chat is None:
-        raise NotFound
+    chat = await get_public_chat_or_404(session, chat_id)
 
     if not await _is_chat_admin(session, user_id, chat_id):
         raise UserNotAdminException
@@ -298,7 +379,7 @@ async def delete_chat(
 ) -> None:
     """Deletes public chat with given id.
     If chat doesn't exist, raises 404 http exception."""
-    chat = await get_public_chat_or_404(session, chat_id)
+    chat = await get_public_chat_with_members_or_404(session, chat_id)
 
     if not await _is_chat_owner(session, user_id, chat_id):
         raise UserNotOwnerException
@@ -384,18 +465,102 @@ async def enroll_user_with_token(
 
 
 async def update_membership(
-    session: AsyncSession, chat_id: int, user_id: int, target_id: int, payload
+    session: AsyncSession,
+    chat_id: int,
+    user_id: int,
+    target_id: int,
+    payload: Mapping[str, Any],
 ):
-    return None
+    """Updates chat member's information, his admin, owner status.
+    If User is not chat admin raises 403.
+    If non owner tries to make someone owner raises 403."""
+    if (
+        "is_owner" in payload.keys()
+        and await _is_chat_owner(session, user_id, chat_id) is False
+    ):
+        raise UserNotOwnerException
+    elif not await _is_chat_admin(session, user_id, chat_id):
+        raise UserNotAdminException
+
+    await session.execute(
+        update(Membership)
+        .values(**payload)
+        .where(
+            (Membership.chat_id == chat_id) & (Membership.user_id == target_id)
+        )
+    )
+
+    if (
+        await session.scalar(
+            exists()
+            .where(
+                (Membership.chat_id == chat_id)
+                & (Membership.user_id == target_id)
+            )
+            .select()
+        )
+        is False
+    ):
+        raise http_404_not_found("Member not found.")
+
+    return (
+        await session.execute(
+            select(user_membership_join_fields)
+            .join(Membership, User.id == Membership.user_id)
+            .where(User.id == target_id, Membership.chat_id == chat_id)
+        )
+    ).one()
 
 
 async def remove_member(
     session: AsyncSession, chat_id: int, user_id: int, target_id: int
 ):
+    """Removes given user from chat. If user is not admin raises 403."""
+
     return None
 
 
-async def list_chat_messages(
-    session: AsyncSession, chat_id: int, user_id: int
-):
-    return None
+async def list_public_chat_messages(
+    session: AsyncSession,
+    chat_id: int,
+    user_id: int,
+    paginator: BasePaginator | None = None,
+) -> list[Message] | PaginatedResponse[MessageRead]:
+    """Lists messages from public chat,
+    if user is not chat member, raises 403."""
+    if not await is_chat_member(session, user_id, chat_id):
+        raise UserNotMemberException
+
+    query = (
+        select(Message)
+        .options(joinedload(Message.sender), defer("sender_id"))
+        .where(Message.chat_id == chat_id)
+        .order_by(Message.created_at.desc())
+    )
+
+    if paginator:
+        return await paginator.get_paginated_response_for_model(query)
+
+    return (await session.scalars(query)).all()
+
+
+async def list_chat_members(
+    session: AsyncSession,
+    chat_id: int,
+    user_id: int,
+    paginator: BasePaginator | None = None,
+) -> list[Row] | PaginatedResponse[MemberRead]:
+    """Lists chat members. If given user is not chat member, raises 403."""
+    if not await is_chat_member(session, user_id, chat_id):
+        raise UserNotMemberException
+
+    query = (
+        select(user_membership_join_fields)
+        .join(Membership, User.id == Membership.user_id)
+        .where(Membership.chat_id == chat_id)
+    )
+
+    if paginator:
+        return await paginator.get_paginated_response_for_rows(query)
+
+    return (await session.execute(query)).all()

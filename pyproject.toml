@@ -59,11 +59,10 @@ urllib3 = "1.26.12"
 uvicorn = "0.18.3"
 watchfiles = "0.16.1"
 websockets = "10.3"
-bandit = "^1.7.4"
-flake8-bandit = "^4.1.1"
 
 [tool.poetry.group.dev.dependencies]
 asyncpg-stubs = "^0.27.0"
+bandit = {extras = ["toml"], version = "^1.7.4"}
 black = "^22.12.0"
 coverage = "6.4.4"
 flake8 = "5.0.4"
@@ -82,6 +81,9 @@ typing-extensions = "4.3.0"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.bandit]
+assert_used = {skips = ["*_test.py", "*test_*.py"]}
 
 [tool.black]
 line-length = 79

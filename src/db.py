@@ -24,7 +24,7 @@ async_session = sessionmaker(
 Base = declarative_base()
 
 # Broadcaster-Redis
-broadcaster = Broadcast(settings.redis_url)
+broadcaster = Broadcast(settings.messaging_url)
 
 
 async def ping_sql_database():
@@ -49,7 +49,7 @@ async def ping_sql_database():
 
 async def ping_redis_database():
     """Pings redis server in order to make sure that it is up and running."""
-    params = utils.parse_url(settings.redis_url)
+    params = utils.parse_url(settings.messaging_url)
 
     try:
         server = Redis(
@@ -65,5 +65,5 @@ async def ping_redis_database():
         raise RedisConnectionError(
             "Cannot connect to redis server. "
             "Are you sure that it is up and running at "
-            f"{settings.redis_url}?"
+            f"{settings.messaging_url}?"
         ) from ext

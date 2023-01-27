@@ -29,6 +29,5 @@ class PaginatedResponse(GenericModel, Generic[T]):
     total_records: int
     current_page: int
     items_per_page: int
-
-    class Config:
-        orm_mode = True
+    prev_page: str | None
+    next_page: str | None
