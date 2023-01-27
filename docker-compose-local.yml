@@ -1,0 +1,35 @@
+version: "3.9"
+
+services:
+  fastapi:
+    build:
+      context: .
+      dockerfile: ./docker/local/fastapi/Dockerfile
+    command: /start
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./docker/local/fastapi/.env
+      - ./docker/local/postgres/.env
+    environment:
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+
+  postgres:
+    image: postgres:14.5-alpine
+    container_name: chatapp_postgres_db
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    env_file:
+      - ./docker/local/postgres/.env
+
+  redis:
+    image: redis:6.0.16
+    volumes:
+      - redis-data:/data
+
+volumes:
+  postgres-data:
+  redis-data:

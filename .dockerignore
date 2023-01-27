@@ -14,7 +14,21 @@ __pycache__
 .pytest_cache
 htmlcov
 .coverage
-.venv/
 
-.docker
+
+# env
+.venv/
 .env
+venv/
+.env/
+# Env var file
+env
+
+# misc
+.pre-commit-config.yaml
+.docker
+
+media/*
+media/*/*
+media/*/*/*
+media/*/*/*/*
