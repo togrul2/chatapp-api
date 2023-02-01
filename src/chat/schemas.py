@@ -3,8 +3,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConstrainedStr
 
-from src.schemas.base import BaseOrmModel
-from src.schemas.user import UserRead
+from src.base.schemas import BaseOrmModel
+from src.user.schemas import UserRead
 
 
 class BaseChat(BaseOrmModel):

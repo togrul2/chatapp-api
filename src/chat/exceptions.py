@@ -6,12 +6,6 @@ WebSocketChatDoesNotExist = WebSocketException(
     reason="Chat does not exist",
 )
 
-
-WebSocketBadTokenException = WebSocketException(
-    code=status.WS_1008_POLICY_VIOLATION,
-    reason="Authentication token is expired or incorrect",
-)
-
 ChatNameTakenException = HTTPException(
     status_code=status.HTTP_409_CONFLICT,
     detail="This chat name is already taken by another chat.",

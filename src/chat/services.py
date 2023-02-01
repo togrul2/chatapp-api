@@ -13,26 +13,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer, joinedload
 from typing_extensions import NotRequired
 
-from src.config import ALGORITHM, CHAT_INVITE_LINK_DURATION, settings
-from src.exceptions.base import http_404_not_found
-from src.exceptions.chat import (
+from src.base import services as base_services
+from src.base.exceptions import Http404NotFoundException
+from src.base.schemas import PaginatedResponse
+from src.chat.exceptions import (
     ChatNameTakenException,
     UserNotAdminException,
     UserNotMemberException,
     UserNotOwnerException,
 )
-from src.models.chat import Chat, Membership, Message
-from src.models.user import User
-from src.paginator import BasePaginator
-from src.schemas.base import PaginatedResponse
-from src.schemas.chat import (
+from src.chat.models import Chat, Membership, Message
+from src.chat.schemas import (
     ChatCreate,
     ChatReadWithMembers,
     ChatUpdate,
     MemberRead,
     MessageRead,
 )
-from src.services import base as base_services
+from src.config import ALGORITHM, CHAT_INVITE_LINK_DURATION, settings
+from src.paginator import BasePaginator
+from src.user.models import User
 
 user_membership_join_fields = (
     User.id,
@@ -106,7 +106,7 @@ async def _create_chat(
 
         except IntegrityError as exc:
             await session.rollback()
-            raise http_404_not_found(
+            raise Http404NotFoundException(
                 f"User with id of {user_dict['id']} does not exist."
             ) from exc
 
@@ -174,7 +174,7 @@ async def list_private_chat_messages(
 ) -> PaginatedResponse[MessageRead] | list[Message]:
     """Returns messages from a private chat with a given id."""
     if (chat := await _get_private_chat(session, user_id, target_id)) is None:
-        raise http_404_not_found(
+        raise Http404NotFoundException(
             "Private chat with given user has not been found."
         )
 
@@ -296,7 +296,7 @@ async def get_public_chat_or_404(session: AsyncSession, chat_id: int) -> Chat:
     chat = await session.get(Chat, chat_id)
 
     if chat is None:
-        raise http_404_not_found(
+        raise Http404NotFoundException(
             "Public chat with given id has not been found."
         )
 
@@ -312,7 +312,7 @@ async def get_public_chat_with_members_or_404(
     chat = await _get_public_chat_with_members(session, chat_id)
 
     if chat is None:
-        raise http_404_not_found(
+        raise Http404NotFoundException(
             "Public chat with given id has not been found."
         )
 
@@ -501,7 +501,7 @@ async def update_membership(
         )
         is False
     ):
-        raise http_404_not_found("Member not found.")
+        raise Http404NotFoundException("Member not found.")
 
     return (
         await session.execute(

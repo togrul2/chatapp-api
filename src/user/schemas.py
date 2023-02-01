@@ -5,8 +5,8 @@ from urllib import parse
 
 from pydantic import BaseModel, EmailStr, Field, validator
 
+from src.base.schemas import BaseOrmModel
 from src.config import STATIC_DOMAIN
-from src.schemas.base import BaseOrmModel
 
 
 class UserBase(BaseOrmModel):

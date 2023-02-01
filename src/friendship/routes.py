@@ -2,16 +2,13 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.dependencies import (
-    get_current_user_id_from_bearer,
-    get_db,
-    get_paginator,
-)
+from src.auth.dependencies import get_current_user_id_from_bearer
+from src.base.schemas import DetailMessage, PaginatedResponse
+from src.dependencies import get_db, get_paginator
+from src.friendship import services as friendship_services
+from src.friendship.schemas import FriendshipRead, FriendshipReadWithSender
 from src.paginator import BasePaginator
-from src.schemas.base import DetailMessage, PaginatedResponse
-from src.schemas.friendship import FriendshipRead, FriendshipReadWithSender
-from src.schemas.user import UserRead
-from src.services import friendship as friendship_services
+from src.user.schemas import UserRead
 
 router = APIRouter(
     prefix="/api/friendship",

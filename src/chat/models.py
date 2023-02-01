@@ -8,12 +8,10 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
-from src.models.base import CreateTimestampMixin, CustomBase
-
-__all__ = ["Membership", "Chat", "Message"]
+from src.base.models import CreateTimestampMixin, CustomBase
 
 if TYPE_CHECKING:
-    from src.models.user import User
+    from user.models import User
 
 
 class Membership(CustomBase):

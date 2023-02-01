@@ -7,12 +7,12 @@ from broadcaster import Broadcast  # type: ignore
 from fastapi import WebSocket
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from exceptions.chat import WebSocketChatDoesNotExist
-from src.models.chat import Chat, Message
-from src.schemas.user import UserRead
-from src.services import base as base_services
-from src.services import chat as chat_services
-from src.services import user as user_services
+from src.base import services as base_services
+from src.chat import services as chat_services
+from src.chat.exceptions import WebSocketChatDoesNotExist
+from src.chat.models import Chat, Message
+from src.user import services as user_services
+from src.user.schemas import UserRead
 
 
 @dataclass

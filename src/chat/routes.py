@@ -4,16 +4,13 @@ import asyncio
 from fastapi import APIRouter, Depends, Form, Request, WebSocket, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.db import broadcaster
-from src.dependencies import (
+from src.auth.dependencies import (
     get_current_user_id_from_bearer,
     get_current_user_id_from_cookie,
-    get_db,
-    get_paginator,
 )
-from src.paginator import BasePaginator
-from src.schemas.base import DetailMessage, PaginatedResponse
-from src.schemas.chat import (
+from src.base.schemas import DetailMessage, PaginatedResponse
+from src.chat import services as chat_services
+from src.chat.schemas import (
     ChatCreate,
     ChatRead,
     ChatReadWithMembers,
@@ -23,11 +20,13 @@ from src.schemas.chat import (
     MembershipUpdate,
     MessageRead,
 )
-from src.services import chat as chat_services
-from src.websocket_managers.chat import (
+from src.chat.websocket_managers import (
     ChatMessagesManager,
     PrivateMessageManager,
 )
+from src.db import broadcaster
+from src.dependencies import get_db, get_paginator
+from src.paginator import BasePaginator
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -107,13 +106,13 @@ async def list_public_chats(
     response_model=ChatReadWithMembers,
     status_code=status.HTTP_201_CREATED,
     responses={
-        status.HTTP_409_CONFLICT: {
-            "model": DetailMessage,
-            "description": "Chat name is taken.",
-        },
         status.HTTP_404_NOT_FOUND: {
             "model": DetailMessage,
             "description": "User with given id does not exist.",
+        },
+        status.HTTP_409_CONFLICT: {
+            "model": DetailMessage,
+            "description": "Chat name is taken.",
         },
     },
 )

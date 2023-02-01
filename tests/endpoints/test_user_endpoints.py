@@ -11,14 +11,8 @@ from PIL import Image
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.authentication import create_access_token, create_refresh_token
-from src.exceptions.user import (
-    BadCredentialsException,
-    EmailAlreadyTaken,
-    HTTPBadTokenException,
-    UsernameAlreadyTaken,
-)
-from src.models.user import User
+from src.user.exceptions import EmailAlreadyTaken, UsernameAlreadyTaken
+from src.user.models import User
 from tests.conftest import TEST_STATIC_ROOT
 
 
@@ -87,61 +81,6 @@ class TestRegisterUser:
 
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert response.json()["detail"] == EmailAlreadyTaken.detail
-
-
-@pytest.mark.asyncio
-class TestToken:
-    """Test token and refresh endpoint."""
-
-    token_url = (
-        "/api/token"  # nosec - ✅ token is a part of url, not a password
-    )
-    refresh_url = "/api/refresh"
-
-    async def test_token_success(self, client: AsyncClient, user: User):
-        """Test successful token creation endpoint"""
-        user_data = {"username": user.username, "password": "Testpassword"}
-        response = await client.post(self.token_url, data=user_data)
-
-        assert response.status_code == status.HTTP_201_CREATED
-        assert response.json().keys() == frozenset(
-            {"access_token", "refresh_token"}
-        )
-
-    async def test_token_invalid_credentials(
-        self, client: AsyncClient, user: User
-    ):
-        """Test token create with invalid credentials attempt."""
-        user_data = {
-            "username": user.username,
-            "password": "Testpassword" + "wrong",
-        }
-        response = await client.post(self.token_url, data=user_data)
-
-        assert response.status_code == status.HTTP_401_UNAUTHORIZED
-        assert response.json()["detail"] == BadCredentialsException.detail
-
-    async def test_refresh_success(self, client: AsyncClient, user: User):
-        """Test refresh endpoint successful attempt."""
-        refresh_token = create_refresh_token(cast(int, user.id))
-        response = await client.post(
-            self.refresh_url, data={"refresh_token": refresh_token}
-        )
-
-        assert response.status_code == status.HTTP_201_CREATED
-        assert response.json().keys() == frozenset(
-            {"access_token", "refresh_token"}
-        )
-
-    async def test_refresh_bad_data(self, client: AsyncClient, user: User):
-        """Test refresh endpoint with invalid refresh token."""
-        refresh_token = create_access_token(cast(int, user.id))
-        response = await client.post(
-            self.refresh_url, data={"refresh_token": refresh_token}
-        )
-
-        assert response.status_code == status.HTTP_401_UNAUTHORIZED
-        assert response.json()["detail"] == HTTPBadTokenException.detail
 
 
 @pytest.mark.asyncio

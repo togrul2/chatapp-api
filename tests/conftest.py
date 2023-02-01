@@ -14,12 +14,13 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-from src.authentication import create_access_token, password_context
+from src.auth.jwt import create_access_token, password_context
 from src.config import BASE_DIR, settings
 from src.dependencies import get_db, get_staticfiles_manager
+from src.friendship.models import Friendship
 from src.main import app as fastapi_app
-from src.models.user import Friendship, User
 from src.staticfiles import LocalStaticFilesManager
+from src.user.models import User
 from src.utils import parse_url
 from tests.db_managers import (
     DBSQLAsyncManager,

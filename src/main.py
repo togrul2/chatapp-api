@@ -3,11 +3,18 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from src.config import STATIC_ROOT, STATIC_URL
+from src.auth.routes import router as auth_router
+from src.chat.routes import router as chat_router
+from src.config import (
+    ALLOWED_HEADERS,
+    ALLOWED_METHODS,
+    ALLOWED_ORIGINS,
+    STATIC_ROOT,
+    STATIC_URL,
+)
 from src.db import broadcaster, ping_redis_database, ping_sql_database
-from src.routes.chat import router as chat_router
-from src.routes.friendship import router as friendship_router
-from src.routes.user import router as user_router
+from src.friendship.routes import router as friendship_router
+from src.user.routes import router as user_router
 
 app = FastAPI(
     title="Chatapp API",
@@ -34,12 +41,14 @@ app.mount(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:8000"],
+    allow_origins=[ALLOWED_ORIGINS],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=[ALLOWED_METHODS],
+    allow_headers=[ALLOWED_HEADERS],
 )
 
+# Routes
+app.include_router(auth_router)
 app.include_router(user_router)
 app.include_router(friendship_router)
 app.include_router(chat_router)

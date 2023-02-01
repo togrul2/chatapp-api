@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import CompoundSelect
 from sqlalchemy.sql.expression import Select
 
-from src.models.base import CustomBase
+from src.base.models import CustomBase
 
 
 class PaginatedResponseDict(TypedDict):
@@ -105,7 +105,7 @@ class BasePaginator(ABC):
         can be used where select() only takes model instance.
 
         Example:
-            >>> from src.models.user import User
+            >>> from src.user.models import User
             >>> list_query = select(User)
             >>> response = self.get_paginated_response_for_model(list_query)
         """
@@ -125,7 +125,7 @@ class BasePaginator(ABC):
         and select() takes different fields.
 
         Example:
-            >>> from src.models.chat import Chat, Membership
+            >>> from src.chat.models import Chat, Membership
             >>> list_query = (
             >>>     select(Chat, func.count(Membership.id))
             >>>     .join(Membership).group_by(Chat.id))

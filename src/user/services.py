@@ -4,26 +4,20 @@ Contains functions and coroutines for
 performing business logic related to user and authentication.
 """
 import os
-from typing import TypedDict, cast
 
 from fastapi import UploadFile
 from sqlalchemy import delete, exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src import authentication
-from src.authentication import password_context
-from src.exceptions.base import http_404_not_found
-from src.exceptions.user import (
-    BadCredentialsException,
-    EmailAlreadyTaken,
-    HTTPBadTokenException,
-    UsernameAlreadyTaken,
-)
-from src.models.user import User
+from src.auth.exceptions import BadTokenException
+from src.auth.jwt import password_context
+from src.base import services as base_services
+from src.base.exceptions import Http404NotFoundException
+from src.base.schemas import PaginatedResponse
 from src.paginator import BasePaginator
-from src.schemas.base import PaginatedResponse
-from src.schemas.user import UserBase, UserCreate, UserPartialUpdate, UserRead
-from src.services import base as base_services
+from src.user.exceptions import EmailAlreadyTaken, UsernameAlreadyTaken
+from src.user.models import User
+from src.user.schemas import UserBase, UserCreate, UserPartialUpdate, UserRead
 
 
 def get_profile_pictures_dir(user_id: int):
@@ -65,9 +59,7 @@ async def get_by_id(session: AsyncSession, user_id: int) -> User | None:
     return await session.get(User, user_id)
 
 
-async def _get_by_username(
-    session: AsyncSession, username: str
-) -> User | None:
+async def get_by_username(session: AsyncSession, username: str) -> User | None:
     """Returns user with matching username."""
     query = select(User).where(User.username == username)
     return await session.scalar(query)
@@ -79,7 +71,7 @@ async def get_or_401(session: AsyncSession, user_id: int) -> User:
     user = await get_by_id(session, user_id)
 
     if user is None:
-        raise HTTPBadTokenException
+        raise BadTokenException
 
     return user
 
@@ -90,7 +82,9 @@ async def get_or_404(session: AsyncSession, user_id: int) -> User:
     user = await get_by_id(session, user_id)
 
     if user is None:
-        raise http_404_not_found("User with given id has not been found.")
+        raise Http404NotFoundException(
+            "User with given id has not been found."
+        )
 
     return user
 
@@ -98,10 +92,10 @@ async def get_or_404(session: AsyncSession, user_id: int) -> User:
 async def get_by_username_or_404(session: AsyncSession, username: str) -> User:
     """Returns user by his username.
     If user is not found, raises 404 not found error"""
-    user = await _get_by_username(session, username)
+    user = await get_by_username(session, username)
 
     if user is None:
-        raise http_404_not_found(
+        raise Http404NotFoundException(
             "User with given username has not been found."
         )
 
@@ -160,46 +154,6 @@ async def remove_profile_picture(session: AsyncSession, user_id: int) -> User:
     await session.commit()
     await session.refresh(user)
     return user
-
-
-class AuthTokens(TypedDict):
-    """Typed dict for access and refresh tokens."""
-
-    access_token: str
-    refresh_token: str
-
-
-def _generate_auth_tokens(user_id: int) -> AuthTokens:
-    """Generates access and refresh tokens for user with given id."""
-    return {
-        "access_token": authentication.create_access_token(user_id),
-        "refresh_token": authentication.create_refresh_token(user_id),
-    }
-
-
-async def authenticate_user(
-    session: AsyncSession, username: str, password: str
-) -> AuthTokens:
-    """Authenticates user with given username and password.
-    Returns user if credentials are correct, otherwise raises 401"""
-    user = await _get_by_username(session, username)
-
-    if (
-        user is None
-        or password_context.verify(password, user.password) is False
-    ):
-        raise BadCredentialsException
-
-    return _generate_auth_tokens(cast(int, user.id))
-
-
-async def refresh_tokens(
-    session: AsyncSession, refresh_token: str
-) -> AuthTokens:
-    """Returns new access and refresh tokens if refresh token is valid."""
-    user_id, _ = authentication.get_user_id_from_refresh_token(refresh_token)
-    await get_or_401(session, user_id)
-    return _generate_auth_tokens(user_id)
 
 
 async def update_user(

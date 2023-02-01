@@ -3,15 +3,16 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer, joinedload
 
-from src.exceptions.base import http_404_not_found
-from src.exceptions.friendship import RequestAlreadySent, RequestWithYourself
-from src.models.user import Friendship, User
+from src.base import services as base_services
+from src.base.exceptions import Http404NotFoundException
+from src.base.schemas import PaginatedResponse
+from src.friendship.exceptions import RequestAlreadySent, RequestWithYourself
+from src.friendship.models import Friendship
+from src.friendship.schemas import FriendshipReadWithSender
 from src.paginator import BasePaginator
-from src.schemas.base import PaginatedResponse
-from src.schemas.friendship import FriendshipReadWithSender
-from src.schemas.user import UserRead
-from src.services import base as base_services
-from src.services import user as user_services
+from src.user import services as user_services
+from src.user.models import User
+from src.user.schemas import UserRead
 
 
 async def list_pending_friendships(
@@ -106,7 +107,7 @@ async def get_friendship_with_user_or_404(
             session, user_id, target_id
         )
     ) is None:
-        raise http_404_not_found(
+        raise Http404NotFoundException(
             "Friendship with given user has not been found."
         )
     return friendship
@@ -124,7 +125,7 @@ async def get_friendship_request_with_user_or_404(
             session, user_id, target_id
         )
     ) is None:
-        raise http_404_not_found(
+        raise Http404NotFoundException(
             "Friendship request with given user has not been found."
         )
     return friendship

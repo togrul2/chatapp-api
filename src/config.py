@@ -4,6 +4,11 @@ from pathlib import Path
 from dotenv import load_dotenv
 from pydantic import BaseSettings
 
+# Cors and other basic settings
+ALLOWED_ORIGINS = "http://localhost:8000"
+ALLOWED_METHODS = "*"
+ALLOWED_HEADERS = "*"
+
 # Directories
 SRC_DIR = Path(__file__).resolve().parent  # /src
 BASE_DIR = SRC_DIR.parent

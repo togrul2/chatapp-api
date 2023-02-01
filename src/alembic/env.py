@@ -2,16 +2,16 @@
 import asyncio
 from logging.config import fileConfig
 
+from alembic import context
 from sqlalchemy import engine_from_config, pool
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from alembic import context
 from src.config import settings
 from src.db import Base
-
 # Models
-from src.models.chat import Chat, Membership, Message  # noqa: F401
-from src.models.user import Block, Friendship, User  # noqa: F401
+from src.chat.models import Chat, Membership, Message  # noqa: F401
+from src.friendship.models import Friendship  # noqa: F401
+from src.user.models import Block, User  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -28,6 +28,7 @@ if config.config_file_name is not None:
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
 target_metadata = Base.metadata
+
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

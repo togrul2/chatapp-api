@@ -2,71 +2,20 @@
 import uuid
 from urllib import parse
 
-from fastapi import APIRouter, Depends, Form, UploadFile, status
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi import APIRouter, Depends, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src import utils
-from src.dependencies import (
-    get_current_user_id_from_bearer,
-    get_db,
-    get_paginator,
-    get_staticfiles_manager,
-)
-from src.exceptions.user import BadImageFileMIME
+from src.auth.dependencies import get_current_user_id_from_bearer
+from src.base.schemas import DetailMessage, PaginatedResponse
+from src.dependencies import get_db, get_paginator, get_staticfiles_manager
 from src.paginator import BasePaginator
-from src.schemas.base import DetailMessage, PaginatedResponse
-from src.schemas.user import UserBase, UserCreate, UserPartialUpdate, UserRead
-from src.services import user as user_services
 from src.staticfiles import BaseStaticFilesManager
+from src.user import services as user_services
+from src.user.exceptions import BadImageFileMIME
+from src.user.schemas import UserBase, UserCreate, UserPartialUpdate, UserRead
 
 router = APIRouter(prefix="/api", tags=["user"])
-
-
-@router.post(
-    "/token",
-    status_code=status.HTTP_201_CREATED,
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {
-            "model": DetailMessage,
-            "description": "Bad credentials",
-        }
-    },
-)
-async def token(
-    credentials: OAuth2PasswordRequestForm = Depends(),
-    session: AsyncSession = Depends(get_db),
-):
-    """
-    Creates access and refresh token for user:
-    - **username**: username of a user.
-    - **password**: password of a user.
-
-    """
-    return await user_services.authenticate_user(
-        session, credentials.username, credentials.password
-    )
-
-
-@router.post(
-    "/refresh",
-    status_code=status.HTTP_201_CREATED,
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {
-            "model": DetailMessage,
-            "description": "Bad refresh token",
-        }
-    },
-)
-async def refresh(
-    refresh_token: str = Form(),
-    session: AsyncSession = Depends(get_db),
-):
-    """
-    Creates access & refresh tokens based on refresh token.
-    - **refresh_token**: refresh token
-    """
-    return await user_services.refresh_tokens(session, refresh_token)
 
 
 @router.get("/users", response_model=PaginatedResponse[UserRead])

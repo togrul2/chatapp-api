@@ -3,25 +3,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import (
-    Boolean,
-    Column,
-    ForeignKey,
-    Integer,
-    String,
-    UniqueConstraint,
-)
+from sqlalchemy import Column, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import relationship
 
-from src.models.base import CreateTimestampMixin, CustomBase
-
-__all__ = ["Friendship", "User", "Block"]
-
+from src.base.models import CustomBase
 
 if TYPE_CHECKING:
     # if the target of the relationship is in another module
     # that cannot normally be imported at runtime
-    from src.models.chat import Chat
+    from chat.models import Chat
 
 
 class User(CustomBase):
@@ -40,24 +30,6 @@ class User(CustomBase):
     chats: list[Chat] = relationship(
         "Chat", secondary="membership", back_populates="users"
     )
-
-
-class Friendship(CreateTimestampMixin):
-    """Friendship model for storing relations between users."""
-
-    __tablename__ = "friendship"
-    __table_args__ = (
-        UniqueConstraint(
-            "sender_id", "receiver_id", name="unique_sender_receiver"
-        ),
-    )
-    __repr_fields__ = ("id", "sender_id", "receiver_id")
-
-    sender_id = Column(Integer, ForeignKey("user.id"))
-    receiver_id = Column(Integer, ForeignKey("user.id"))
-    accepted = Column(Boolean)
-
-    sender: User = relationship("User", foreign_keys="Friendship.sender_id")
 
 
 class Block(CustomBase):

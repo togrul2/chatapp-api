@@ -17,13 +17,7 @@ BadCredentialsException = HTTPException(
     headers={"WWW-Authenticate": "Bearer"},
 )
 
-HTTPBadTokenException = HTTPException(
-    status_code=status.HTTP_401_UNAUTHORIZED,
-    detail="Token is either expired or invalid.",
-    headers={"WWW-Authenticate": "Bearer"},
-)
-
 BadImageFileMIME = HTTPException(
-    status_code=400,
+    status_code=status.HTTP_400_BAD_REQUEST,
     detail="Wrong file type, only jpeg and png files are allowed",
 )
