@@ -3,7 +3,7 @@ Schemas for validation in controllers via pydantic.
 """
 from urllib import parse
 
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import EmailStr, Field, validator
 
 from src.base.schemas import BaseOrmModel
 from src.config import STATIC_DOMAIN
@@ -55,10 +55,3 @@ class UserPartialUpdate(BaseOrmModel):
     email: EmailStr | None
     first_name: str | None = Field(min_length=2)
     last_name: str | None = Field(min_length=2)
-
-
-class TokenData(BaseModel):
-    """Schema for validating payload with user access and refresh tokens."""
-
-    access_token: str
-    refresh_token: str
