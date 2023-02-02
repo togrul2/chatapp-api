@@ -25,3 +25,8 @@ UserNotMemberException = HTTPException(
     status_code=status.HTTP_403_FORBIDDEN,
     detail="This action is only available for chat members.",
 )
+
+BadInviteTokenException = HTTPException(
+    status_code=status.HTTP_400_BAD_REQUEST,
+    detail="Invite token is either invalid or expired.",
+)

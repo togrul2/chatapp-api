@@ -14,9 +14,10 @@ from sqlalchemy.orm import defer, joinedload
 from typing_extensions import NotRequired
 
 from src.base import services as base_services
-from src.base.exceptions import Http404NotFoundException
+from src.base.exceptions import NotFoundException
 from src.base.schemas import PaginatedResponse
 from src.chat.exceptions import (
+    BadInviteTokenException,
     ChatNameTakenException,
     UserNotAdminException,
     UserNotMemberException,
@@ -106,7 +107,7 @@ async def _create_chat(
 
         except IntegrityError as exc:
             await session.rollback()
-            raise Http404NotFoundException(
+            raise NotFoundException(
                 f"User with id of {user_dict['id']} does not exist."
             ) from exc
 
@@ -174,7 +175,7 @@ async def list_private_chat_messages(
 ) -> PaginatedResponse[MessageRead] | list[Message]:
     """Returns messages from a private chat with a given id."""
     if (chat := await _get_private_chat(session, user_id, target_id)) is None:
-        raise Http404NotFoundException(
+        raise NotFoundException(
             "Private chat with given user has not been found."
         )
 
@@ -285,18 +286,13 @@ async def _get_public_chat_with_members(
     return chat_query.one_or_none()
 
 
-async def get_public_chat_or_1008(session: AsyncSession, chat_id: int) -> Chat:
-    """Returns single row with chat info with given id.
-    If it does not exist, returns 404 error code."""
-
-
 async def get_public_chat_or_404(session: AsyncSession, chat_id: int) -> Chat:
     """Returns single row with chat info with given id.
     If it does not exist, returns 404 error code."""
     chat = await session.get(Chat, chat_id)
 
     if chat is None:
-        raise Http404NotFoundException(
+        raise NotFoundException(
             "Public chat with given id has not been found."
         )
 
@@ -312,7 +308,7 @@ async def get_public_chat_with_members_or_404(
     chat = await _get_public_chat_with_members(session, chat_id)
 
     if chat is None:
-        raise Http404NotFoundException(
+        raise NotFoundException(
             "Public chat with given id has not been found."
         )
 
@@ -391,13 +387,21 @@ async def delete_chat(
     await session.commit()
 
 
-def _generate_invite_token(chat_id: int) -> str:
+class InvitationJWT(TypedDict):
+    type: str
+    chat_id: int
+    expire: str
+
+
+def _generate_invite_token(
+    chat_id: int, expiration_time: int = CHAT_INVITE_LINK_DURATION
+) -> str:
     """Generates invite token for given chat."""
-    expire = datetime.utcnow() + timedelta(seconds=CHAT_INVITE_LINK_DURATION)
+    expire = datetime.utcnow() + timedelta(seconds=expiration_time)
     payload = {
-        "expire": expire.isoformat(),
         "type": "chat-invitation",
         "chat_id": chat_id,
+        "expire": expire.isoformat(),
     }
     encoded_jwt = jwt.encode(payload, settings.secret_key, algorithm=ALGORITHM)
     return encoded_jwt
@@ -421,25 +425,6 @@ async def enroll_user_with_token(
     """Enrolls user to chat. If token cannot be
     parsed or expired or is invalid, 400 http error is raised.
     If user is already in chat, 409 http error is raised."""
-
-    try:
-        body = jwt.decode(token, settings.secret_key, ALGORITHM)
-    except JWTError as exc:
-        raise HTTPException(
-            status_code=400, detail="Token is either invalid or expired."
-        ) from exc
-
-    if not (
-        datetime.fromisoformat(cast(str, body.get("expire")))
-        <= datetime.utcnow()
-        or chat_id != body.get("chat_id")
-        or body.get("chat_id") != "chat-invitation"
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Token is either invalid or expired.",
-        )
-
     if await session.scalar(
         exists()
         .where(
@@ -451,6 +436,18 @@ async def enroll_user_with_token(
             status_code=status.HTTP_409_CONFLICT,
             detail="You are already enrolled in this chat.",
         )
+
+    try:
+        body: InvitationJWT = jwt.decode(token, settings.secret_key, ALGORITHM)
+    except JWTError as exc:
+        raise BadInviteTokenException from exc
+
+    if not (
+        body["type"] == "chat-invitation"
+        and datetime.fromisoformat(body["expire"]) > datetime.utcnow()
+        and chat_id == body["chat_id"]
+    ):
+        raise BadInviteTokenException
 
     return await base_services.create(
         session,
@@ -501,7 +498,7 @@ async def update_membership(
         )
         is False
     ):
-        raise Http404NotFoundException("Member not found.")
+        raise NotFoundException("Member not found.")
 
     return (
         await session.execute(
@@ -514,10 +511,33 @@ async def update_membership(
 
 async def remove_member(
     session: AsyncSession, chat_id: int, user_id: int, target_id: int
-):
+) -> None:
     """Removes given user from chat. If user is not admin raises 403."""
+    is_target_owner = await session.scalar(
+        select([Membership.is_owner]).where(
+            (Membership.user_id == target_id) & (Membership.chat_id == chat_id)
+        )
+    )
 
-    return None
+    if is_target_owner is None:
+        raise NotFoundException(
+            "Member with given id cannot be found in chat."
+        )
+    elif is_target_owner is True:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Owner cannot be removed from group.",
+        )
+
+    if not await _is_chat_admin(session, user_id, chat_id):
+        raise UserNotAdminException
+
+    await session.execute(
+        delete(Membership).where(
+            (Membership.user_id == target_id) & (Membership.chat_id == chat_id)
+        )
+    )
+    await session.commit()
 
 
 async def list_public_chat_messages(

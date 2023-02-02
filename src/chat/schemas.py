@@ -7,6 +7,45 @@ from src.base.schemas import BaseOrmModel
 from src.user.schemas import UserRead
 
 
+class BaseMessage(BaseOrmModel):
+    """Base Message schema."""
+
+    body: str
+    chat_id: int
+
+
+class MessageRead(BaseMessage):
+    """Schema for validating message read model"""
+
+    id: int
+    sender: UserRead
+    created_at: datetime
+
+
+class MembershipBase(BaseOrmModel):
+    """Base schema for validating membership related operations.
+    Can be used for create validation"""
+
+    user_id: int
+    chat_id: int
+    is_admin: bool
+    is_owner: bool
+
+
+class MembershipUpdate(BaseOrmModel):
+    """Schema for validation membership update payload from request."""
+
+    is_admin: bool
+
+
+class MemberRead(UserRead):
+    """Schema for validating user data for chat members list."""
+
+    chat_id: int
+    is_admin: bool
+    is_owner: bool
+
+
 class BaseChat(BaseOrmModel):
     """Base Schema for chat model"""
 
@@ -53,40 +92,5 @@ class ChatUpdate(BaseChat):
     name: ChatNameStr
 
 
-class BaseMessage(BaseOrmModel):
-    """Base Message schema."""
-
-    body: str
-    chat_id: int
-
-
-class MessageRead(BaseMessage):
-    """Schema for validating message read model"""
-
-    id: int
-    sender: UserRead
-    created_at: datetime
-
-
-class MembershipBase(BaseOrmModel):
-    """Base schema for validating membership related operations.
-    Can be used for create validation"""
-
-    user_id: int
-    chat_id: int
-    is_admin: bool
-    is_owner: bool
-
-
-class MembershipUpdate(BaseOrmModel):
-    """Schema for validation membership update payload from request."""
-
-    is_admin: bool
-
-
-class MemberRead(UserRead):
-    """Schema for validating user data for chat members list."""
-
-    chat_id: int
-    is_admin: bool
-    is_owner: bool
+class ChatReadWithLastMessage(ChatRead):
+    last_message: MessageRead

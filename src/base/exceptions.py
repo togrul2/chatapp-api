@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import HTTPException, status
 
 
-class Http404NotFoundException(HTTPException):
+class NotFoundException(HTTPException):
     """Raises http 404 not found exception.
     Optionally can have detail parameter which
     will be used in exception's constructor,

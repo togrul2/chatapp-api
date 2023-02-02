@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer, joinedload
 
 from src.base import services as base_services
-from src.base.exceptions import Http404NotFoundException
+from src.base.exceptions import NotFoundException
 from src.base.schemas import PaginatedResponse
 from src.friendship.exceptions import RequestAlreadySent, RequestWithYourself
 from src.friendship.models import Friendship
@@ -107,7 +107,7 @@ async def get_friendship_with_user_or_404(
             session, user_id, target_id
         )
     ) is None:
-        raise Http404NotFoundException(
+        raise NotFoundException(
             "Friendship with given user has not been found."
         )
     return friendship
@@ -125,7 +125,7 @@ async def get_friendship_request_with_user_or_404(
             session, user_id, target_id
         )
     ) is None:
-        raise Http404NotFoundException(
+        raise NotFoundException(
             "Friendship request with given user has not been found."
         )
     return friendship

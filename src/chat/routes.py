@@ -13,6 +13,7 @@ from src.chat import services as chat_services
 from src.chat.schemas import (
     ChatCreate,
     ChatRead,
+    ChatReadWithLastMessage,
     ChatReadWithMembers,
     ChatUpdate,
     MemberRead,
@@ -248,7 +249,16 @@ async def update_user_membership(
     )
 
 
-@router.delete("/chats/{chat_id}/members/{target_id}")
+@router.delete(
+    "/chats/{chat_id}/members/{target_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        status.HTTP_403_FORBIDDEN: {
+            "model": DetailMessage,
+            "description": "Target is owner or auth user is not admin.",
+        }
+    },
+)
 async def remove_user_from_chat(
     chat_id: int,
     target_id: int,
@@ -303,3 +313,14 @@ async def list_chat_members(
     return await chat_services.list_chat_members(
         session, chat_id, user_id, paginator
     )
+
+
+@router.get(
+    "/chats", response_model=PaginatedResponse[ChatReadWithLastMessage]
+)
+async def list_user_chats(
+    user_id: int = Depends(get_current_user_id_from_bearer),
+    session: AsyncSession = Depends(get_db),
+    paginator: BasePaginator = Depends(get_paginator),
+):
+    """Returns auth user's chats sorted by the date of their last message."""
