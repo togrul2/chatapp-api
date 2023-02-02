@@ -438,7 +438,9 @@ async def enroll_user_with_token(
         )
 
     try:
-        body: InvitationJWT = jwt.decode(token, settings.secret_key, ALGORITHM)
+        body = cast(
+            InvitationJWT, jwt.decode(token, settings.secret_key, ALGORITHM)
+        )
     except JWTError as exc:
         raise BadInviteTokenException from exc
 

@@ -67,7 +67,7 @@ TEST_STATIC_ROOT = BASE_DIR / "test_static"
 @pytest.fixture(scope="session", autouse=True)
 def event_loop():
     """Custom event loop fixture. Implemented for making it session scoped."""
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
     yield loop
     loop.close()
 

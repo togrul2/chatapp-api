@@ -72,7 +72,7 @@ class BasePaginator(ABC):
     ) -> int:
         """Calculates total number of records in table."""
         return await self.session.scalar(
-            select([func.count()]).select_from(query)
+            select([func.count()]).select_from(query.subquery())
         )
 
     def _response(

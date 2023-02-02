@@ -9,9 +9,7 @@ from sqlalchemy.orm import relationship
 from src.base.models import CustomBase
 
 if TYPE_CHECKING:
-    # if the target of the relationship is in another module
-    # that cannot normally be imported at runtime
-    from chat.models import Chat
+    from src.chat.models import Chat
 
 
 class User(CustomBase):

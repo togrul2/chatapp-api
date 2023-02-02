@@ -11,7 +11,7 @@ from sqlalchemy.orm import relationship
 from src.base.models import CreateTimestampMixin, CustomBase
 
 if TYPE_CHECKING:
-    from user.models import User
+    from src.user.models import User
 
 
 class Membership(CustomBase):
