@@ -1952,6 +1952,57 @@ files = [
 ]
 
 [[package]]
+name = "types-passlib"
+version = "1.7.7.7"
+description = "Typing stubs for passlib"
+category = "dev"
+optional = false
+python-versions = "*"
+files = [
+    {file = "types-passlib-1.7.7.7.tar.gz", hash = "sha256:8db6199a7a7828db7d5adbf63174bd9a05290be52f2364e3c2acc1d47383454a"},
+    {file = "types_passlib-1.7.7.7-py3-none-any.whl", hash = "sha256:1465bfcbc24038e1ac76b9a710f9d45c0d5864d26945864fff694965d8723262"},
+]
+
+[[package]]
+name = "types-pillow"
+version = "9.4.0.6"
+description = "Typing stubs for Pillow"
+category = "dev"
+optional = false
+python-versions = "*"
+files = [
+    {file = "types-Pillow-9.4.0.6.tar.gz", hash = "sha256:51ba83bcebd7d3e21a5a3b558a9ba86b21b0eb3f18d5c66c93189c6ee4c0578b"},
+    {file = "types_Pillow-9.4.0.6-py3-none-any.whl", hash = "sha256:fa638b8be75acf5dac21c7f01dfee645d2885f63a55b7aad95d65b05ac4d7b7d"},
+]
+
+[[package]]
+name = "types-pyasn1"
+version = "0.4.0.0"
+description = "Typing stubs for pyasn1"
+category = "dev"
+optional = false
+python-versions = "*"
+files = [
+    {file = "types-pyasn1-0.4.0.0.tar.gz", hash = "sha256:17b79399b4275a8e00dfec1cf7d906094c45d20616c465d35a460179e6fbb577"},
+    {file = "types_pyasn1-0.4.0.0-py3-none-any.whl", hash = "sha256:ab17c075fe5f9543c42d4390373668fe90f00d194c2dd1af981dc5de2975dfc1"},
+]
+
+[[package]]
+name = "types-python-jose"
+version = "3.3.4.3"
+description = "Typing stubs for python-jose"
+category = "dev"
+optional = false
+python-versions = "*"
+files = [
+    {file = "types-python-jose-3.3.4.3.tar.gz", hash = "sha256:47fb961a2fcfeb8de5d93ce77f4077cb2cbf35a4a3d7b02ee9ef02e7e8e4a77b"},
+    {file = "types_python_jose-3.3.4.3-py3-none-any.whl", hash = "sha256:c6d945769f425c5686b45aa38e6866ce21c488687d5d17ed8f7493882d69ae49"},
+]
+
+[package.dependencies]
+types-pyasn1 = "*"
+
+[[package]]
 name = "typing-extensions"
 version = "4.3.0"
 description = "Backported and Experimental Type Hints for Python 3.7+"
@@ -2186,4 +2237,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "ea158bdeced322be2aefc006d921cc4837387bc554d9982cae1f322d10f48d92"
+content-hash = "4a499cbc921879282f709e83d083b9bac2f4a712e6bc3c80fdab260d7dd9cf15"

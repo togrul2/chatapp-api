@@ -4,10 +4,10 @@ import pytest
 from fastapi import status
 from httpx import AsyncClient
 
-from src.auth.exceptions import BadTokenException
-from src.auth.jwt import create_access_token, create_refresh_token
-from src.user.exceptions import BadCredentialsException
-from src.user.models import User
+from src.chatapp_api.auth.exceptions import BadTokenException
+from src.chatapp_api.auth.jwt import create_access_token, create_refresh_token
+from src.chatapp_api.user.exceptions import BadCredentialsException
+from src.chatapp_api.user.models import User
 
 
 @pytest.mark.asyncio

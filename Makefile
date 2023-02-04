@@ -19,10 +19,10 @@ install-dev: poetry.lock
 	poetry install
 
 run:
-	poetry run uvicorn src.main:app
+	poetry run uvicorn src.chatapp_api.main:app
 
 dev:
-	poetry run uvicorn src.main:app --reload
+	poetry run uvicorn src.chatapp_api.main:app --reload
 
 migrations:
 	poetry run alembic revision --autogenerate
@@ -38,10 +38,10 @@ format:
 	poetry run isort src tests
 
 security:
-	poetry run bandit -r src tests
+	poetry run bandit -c pyproject.toml -r src tests
 
 type:
-	poetry run mypy -p src -p tests
+	poetry run mypy src tests
 
 test:
 	poetry run pytest

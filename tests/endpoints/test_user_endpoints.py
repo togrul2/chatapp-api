@@ -11,8 +11,11 @@ from PIL import Image
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.user.exceptions import EmailAlreadyTaken, UsernameAlreadyTaken
-from src.user.models import User
+from src.chatapp_api.user.exceptions import (
+    EmailAlreadyTaken,
+    UsernameAlreadyTaken,
+)
+from src.chatapp_api.user.models import User
 from tests.conftest import TEST_STATIC_ROOT
 
 

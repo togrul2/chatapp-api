@@ -7,8 +7,8 @@ from httpx import AsyncClient
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.friendship.models import Friendship
-from src.user.models import User
+from src.chatapp_api.friendship.models import Friendship
+from src.chatapp_api.user.models import User
 
 
 @pytest.mark.asyncio

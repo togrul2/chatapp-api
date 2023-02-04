@@ -77,17 +77,20 @@ pytest-asyncio = "^0.20.3"
 pytest-cov = "3.0.0"
 sqlalchemy2-stubs = "0.0.2a27"
 typing-extensions = "4.3.0"
+types-passlib = "^1.7.7.7"
+types-python-jose = "^3.3.4.3"
+types-pillow = "^9.4.0.6"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.bandit]
-assert_used = {skips = ["*_test.py", "*test_*.py"]}
+assert_used = {skips = ["*test_*.py"]}
 
 [tool.black]
 line-length = 79
-target-version = ['py310']
+target-version = ["py310"]
 extend-exclude = """
 ^/src/alembic
 """
@@ -98,14 +101,15 @@ line_length = 79
 skip = ["./src/alembic/versions"]
 
 [tool.mypy]
-plugins=["sqlalchemy.ext.mypy.plugin", "pydantic.mypy"]
+plugins = ["sqlalchemy.ext.mypy.plugin", "pydantic.mypy"]
+explicit_package_bases = true
 
 
 [tool.pylint]
-ignore="versions"
+ignore = "versions"
 
 [tool.pytest.ini_options]
 testpaths = "./tests"
 python_files = "test_*.py"
 asyncio_mode = "auto"
-pythonpath="."
+pythonpath = "."

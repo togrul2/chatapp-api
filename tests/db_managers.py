@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from asyncpg import Connection, connect
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from src.db import Base
+from src.chatapp_api.db import Base
 
 
 @dataclass
@@ -25,7 +25,7 @@ class AsyncConnectionManager:
         )
         return self.conn
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, *args, **kwargs):
         await self.conn.close()
 
 
