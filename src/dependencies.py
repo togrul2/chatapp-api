@@ -31,8 +31,8 @@ def get_staticfiles_manager() -> BaseStaticFilesManager:
 
 def get_paginator(
     request: Request,
-    page: int = Query(default=1),
-    page_size: int = Query(default=PAGE_SIZE_DEFAULT),
+    page: int | None = Query(default=1),
+    page_size: int | None = Query(default=PAGE_SIZE_DEFAULT),
     session: AsyncSession = Depends(get_db),
 ):
     """Returns pagination with page and page size query params."""

@@ -5,8 +5,18 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import relationship
+from sqlalchemy import (
+    Boolean,
+    Column,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    and_,
+    func,
+    select,
+)
+from sqlalchemy.orm import column_property, relationship
 
 from src.base.models import CreateTimestampMixin, CustomBase
 
@@ -36,7 +46,9 @@ class Message(CreateTimestampMixin, CustomBase):
     sender_id = Column(Integer, ForeignKey("user.id"))
     chat_id = Column(Integer, ForeignKey("chat.id"))
 
-    sender: User = relationship("User", backref="messages")
+    sender: User = relationship(
+        "User", backref="messages", uselist=False, viewonly=True
+    )
 
 
 class Chat(CreateTimestampMixin, CustomBase):
@@ -44,10 +56,43 @@ class Chat(CreateTimestampMixin, CustomBase):
 
     __tablename__ = "chat"
 
+    # Redefined `id` field for using in column_property
+    id = Column(Integer, primary_key=True)
     name = Column(String(150))
     private = Column(Boolean, nullable=False)
 
     users: list[User] = relationship(
         "User", secondary="membership", back_populates="chats"
     )
+    users_count = column_property(
+        select([func.count(Membership.user_id)])
+        .where(Membership.chat_id == id)
+        .scalar_subquery(),
+        deferred=True,
+    )
+
     messages: list[Message] = relationship("Message", backref="chat")
+    last_message_id = column_property(
+        select(Message.id)
+        .where(
+            Message.created_at
+            == select([func.max(Message.created_at)])
+            .where(Message.chat_id == id)
+            .correlate_except(Message)
+            .scalar_subquery()
+        )
+        .scalar_subquery(),
+        deferred=True,
+    )
+    last_message_created_at = column_property(
+        select([func.max(Message.created_at)])
+        .where(Message.chat_id == id)
+        .correlate_except(Message)
+        .scalar_subquery()
+    )
+    last_message = relationship(
+        Message,
+        primaryjoin=and_(Message.id == last_message_id, Message.chat_id == id),
+        uselist=False,
+        viewonly=True,
+    )

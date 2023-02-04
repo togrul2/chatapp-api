@@ -1,7 +1,7 @@
 """Module with Chat API Routes & Websockets"""
 import asyncio
 
-from fastapi import APIRouter, Depends, Form, Request, WebSocket, status
+from fastapi import APIRouter, Depends, Form, WebSocket, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.auth.dependencies import (
@@ -14,7 +14,7 @@ from src.chat.schemas import (
     ChatCreate,
     ChatRead,
     ChatReadWithLastMessage,
-    ChatReadWithMembers,
+    ChatReadWithUsersCount,
     ChatUpdate,
     MemberRead,
     MembershipBase,
@@ -92,7 +92,7 @@ async def chat_messages_websocket_route(
     )
 
 
-@router.get("/chats", response_model=PaginatedResponse[ChatReadWithMembers])
+@router.get("/chats", response_model=PaginatedResponse[ChatReadWithUsersCount])
 async def list_public_chats(
     keyword: str | None = None,
     session: AsyncSession = Depends(get_db),
@@ -104,7 +104,7 @@ async def list_public_chats(
 
 @router.post(
     "/chats",
-    response_model=ChatReadWithMembers,
+    response_model=ChatReadWithUsersCount,
     status_code=status.HTTP_201_CREATED,
     responses={
         status.HTTP_404_NOT_FOUND: {
@@ -128,7 +128,7 @@ async def create_public_chat(
 
 @router.get(
     "/chats/{chat_id}",
-    response_model=ChatReadWithMembers,
+    response_model=ChatReadWithUsersCount,
     responses={
         status.HTTP_404_NOT_FOUND: {
             "model": DetailMessage,
@@ -186,7 +186,7 @@ async def delete_public_chat(
 
 
 @router.post(
-    "/chats/{chat_id}/invite-link",
+    "/chats/{chat_id}/generate-invite-token",
     response_model=str,
     responses={
         status.HTTP_403_FORBIDDEN: {
@@ -197,13 +197,12 @@ async def delete_public_chat(
 )
 async def get_invite_link_for_chat(
     chat_id: int,
-    request: Request,
     session: AsyncSession = Depends(get_db),
     user_id: int = Depends(get_current_user_id_from_bearer),
 ):
     """Generates and returns invite link for chat with expiration link."""
     return await chat_services.get_invite_link_for_chat(
-        session, user_id, chat_id, str(request.base_url)
+        session, user_id, chat_id
     )
 
 
@@ -234,7 +233,20 @@ async def enroll_into_chat(
     )
 
 
-@router.patch("/chats/{chat_id}/members/{target_id}")
+@router.patch(
+    "/chats/{chat_id}/members/{target_id}",
+    response_model=MemberRead,
+    responses={
+        status.HTTP_403_FORBIDDEN: {
+            "model": DetailMessage,
+            "description": "User is not admin.",
+        },
+        status.HTTP_404_NOT_FOUND: {
+            "model": DetailMessage,
+            "description": "Member not found.",
+        },
+    },
+)
 async def update_user_membership(
     chat_id: int,
     target_id: int,
@@ -252,6 +264,7 @@ async def update_user_membership(
 @router.delete(
     "/chats/{chat_id}/members/{target_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     responses={
         status.HTTP_403_FORBIDDEN: {
             "model": DetailMessage,
@@ -316,11 +329,16 @@ async def list_chat_members(
 
 
 @router.get(
-    "/chats", response_model=PaginatedResponse[ChatReadWithLastMessage]
+    "/users/me/chats",
+    response_model=PaginatedResponse[ChatReadWithLastMessage],
 )
 async def list_user_chats(
+    keyword: str | None = None,
     user_id: int = Depends(get_current_user_id_from_bearer),
     session: AsyncSession = Depends(get_db),
     paginator: BasePaginator = Depends(get_paginator),
 ):
     """Returns auth user's chats sorted by the date of their last message."""
+    return await chat_services.list_user_chats(
+        session, user_id, paginator, keyword
+    )

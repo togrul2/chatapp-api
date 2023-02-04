@@ -80,10 +80,10 @@ class ChatRead(BaseChat):
     created_at: datetime
 
 
-class ChatReadWithMembers(ChatRead):
+class ChatReadWithUsersCount(ChatRead):
     """Schema for handling chat model read with members field."""
 
-    members: int
+    users_count: int
 
 
 class ChatUpdate(BaseChat):
@@ -93,4 +93,4 @@ class ChatUpdate(BaseChat):
 
 
 class ChatReadWithLastMessage(ChatRead):
-    last_message: MessageRead
+    last_message: MessageRead | None

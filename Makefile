@@ -21,6 +21,9 @@ install-dev: poetry.lock
 run:
 	poetry run uvicorn src.main:app
 
+dev:
+	poetry run uvicorn src.main:app --reload
+
 migrations:
 	poetry run alembic revision --autogenerate
 

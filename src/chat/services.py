@@ -2,20 +2,18 @@
 from collections.abc import Mapping
 from datetime import datetime, timedelta
 from typing import Any, TypedDict, cast
-from urllib import parse
 
 from fastapi import HTTPException, status
 from jose import JWTError, jwt
-from sqlalchemy import Boolean, Column, delete, exists, func, select, update
+from sqlalchemy import Boolean, Column, delete, desc, exists, func, select
 from sqlalchemy.engine import Row
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import defer, joinedload
+from sqlalchemy.orm import defer, joinedload, undefer
 from typing_extensions import NotRequired
 
 from src.base import services as base_services
 from src.base.exceptions import NotFoundException
-from src.base.schemas import PaginatedResponse
 from src.chat.exceptions import (
     BadInviteTokenException,
     ChatNameTakenException,
@@ -24,15 +22,9 @@ from src.chat.exceptions import (
     UserNotOwnerException,
 )
 from src.chat.models import Chat, Membership, Message
-from src.chat.schemas import (
-    ChatCreate,
-    ChatReadWithMembers,
-    ChatUpdate,
-    MemberRead,
-    MessageRead,
-)
+from src.chat.schemas import ChatCreate, ChatUpdate
 from src.config import ALGORITHM, CHAT_INVITE_LINK_DURATION, settings
-from src.paginator import BasePaginator
+from src.paginator import BasePaginator, PaginatedResponseDict
 from src.user.models import User
 
 user_membership_join_fields = (
@@ -57,6 +49,12 @@ class ChatCreateDict(TypedDict):
     private: bool
     users: list[MemberCreateDict]
     name: NotRequired[str]
+
+
+class InvitationJWT(TypedDict):
+    type: str
+    chat_id: int
+    expire: str
 
 
 async def _create_chat(
@@ -90,6 +88,7 @@ async def _create_chat(
             commit=False,
         )
 
+    # TODO: Remove error, instead ignore missing users
     for user_dict in users:
         try:
             await base_services.create(
@@ -172,7 +171,7 @@ async def list_private_chat_messages(
     user_id: int,
     target_id: int,
     paginator: BasePaginator | None = None,
-) -> PaginatedResponse[MessageRead] | list[Message]:
+) -> PaginatedResponseDict | list[Message]:
     """Returns messages from a private chat with a given id."""
     if (chat := await _get_private_chat(session, user_id, target_id)) is None:
         raise NotFoundException(
@@ -211,21 +210,13 @@ async def list_chats(
     session: AsyncSession,
     paginator: BasePaginator | None = None,
     keyword: str | None = None,
-) -> PaginatedResponse[ChatReadWithMembers] | list[Row]:
+) -> PaginatedResponseDict | list[Row]:
     """Returns list of all records.
     If keyword passed returns matching chats only."""
     query = (
-        select(
-            [
-                Chat.id,
-                Chat.created_at,
-                Chat.name,
-                func.count(Membership.id).label("members"),
-            ]
-        )
-        .join(Membership, Chat.id == Membership.chat_id)
+        select(Chat)
+        .options(undefer(Chat.users_count))
         .where(Chat.private == False)  # noqa: E712
-        .group_by(Chat.id)
     )
 
     if keyword:
@@ -233,7 +224,7 @@ async def list_chats(
         query = query.where(func.upper(Chat.name).like(expression))
 
     if paginator:
-        return await paginator.get_paginated_response_for_rows(query)
+        return await paginator.get_paginated_response_for_model(query)
 
     return (await session.execute(query)).all()
 
@@ -264,28 +255,6 @@ async def create_public_chat(
     ).one()
 
 
-async def _get_public_chat_with_members(
-    session: AsyncSession, chat_id: int
-) -> Row | None:
-    """Returns public chat with given id.
-    Additionally, calculates its number of members"""
-    chat_query = await session.execute(
-        select(
-            [
-                Chat.id,
-                Chat.name,
-                Chat.created_at,
-                func.count(Membership.id).label("members"),
-            ]
-        )
-        .join(Membership, Membership.chat_id == Chat.id)
-        .where((Chat.private == False) & (Chat.id == chat_id))  # noqa: E712
-        .group_by(Chat.id)
-    )
-
-    return chat_query.one_or_none()
-
-
 async def get_public_chat_or_404(session: AsyncSession, chat_id: int) -> Chat:
     """Returns single row with chat info with given id.
     If it does not exist, returns 404 error code."""
@@ -305,7 +274,14 @@ async def get_public_chat_with_members_or_404(
     """Returns single row with chat info with given id
     and number of its members. If it does not exist,
     returns 404 error code."""
-    chat = await _get_public_chat_with_members(session, chat_id)
+    chat = await session.scalar(
+        select(Chat)
+        .options(
+            undefer(Chat.users_count),
+            joinedload(Chat.last_message),
+        )
+        .where(Chat.id == chat_id)
+    )
 
     if chat is None:
         raise NotFoundException(
@@ -387,12 +363,6 @@ async def delete_chat(
     await session.commit()
 
 
-class InvitationJWT(TypedDict):
-    type: str
-    chat_id: int
-    expire: str
-
-
 def _generate_invite_token(
     chat_id: int, expiration_time: int = CHAT_INVITE_LINK_DURATION
 ) -> str:
@@ -408,15 +378,14 @@ def _generate_invite_token(
 
 
 async def get_invite_link_for_chat(
-    session: AsyncSession, user_id: int, chat_id: int, base_url: str
+    session: AsyncSession, user_id: int, chat_id: int
 ) -> str:
     """Generates invite link for given group.
     If requesting user is not admin, raises 403 http error."""
     if not await _is_chat_admin(session, user_id, chat_id):
         raise UserNotAdminException
 
-    token = _generate_invite_token(chat_id)
-    return parse.urljoin(base_url, f"api/chats/{chat_id}/enroll?t={token}")
+    return _generate_invite_token(chat_id)
 
 
 async def enroll_user_with_token(
@@ -428,7 +397,7 @@ async def enroll_user_with_token(
     if await session.scalar(
         exists()
         .where(
-            (Membership.chat_id == chat_id) & (Membership.user_id == user_id)
+            (Membership.user_id == user_id) & (Membership.chat_id == chat_id)
         )
         .select()
     ):
@@ -473,35 +442,27 @@ async def update_membership(
     """Updates chat member's information, his admin, owner status.
     If User is not chat admin raises 403.
     If non owner tries to make someone owner raises 403."""
-    if (
-        "is_owner" in payload.keys()
-        and await _is_chat_owner(session, user_id, chat_id) is False
-    ):
-        raise UserNotOwnerException
-    elif not await _is_chat_admin(session, user_id, chat_id):
+    if not await _is_chat_admin(session, user_id, chat_id):
         raise UserNotAdminException
 
-    await session.execute(
-        update(Membership)
-        .values(**payload)
-        .where(
-            (Membership.chat_id == chat_id) & (Membership.user_id == target_id)
+    membership = await session.scalar(
+        select(Membership).where(
+            (Membership.user_id == target_id) & (Membership.chat_id == chat_id)
         )
     )
 
-    if (
-        await session.scalar(
-            exists()
-            .where(
-                (Membership.chat_id == chat_id)
-                & (Membership.user_id == target_id)
-            )
-            .select()
-        )
-        is False
-    ):
+    if membership is None:
         raise NotFoundException("Member not found.")
 
+    # We make sure that admins can't edit
+    # membership's foreign key fields and is_owner field
+    filtered_payload = {
+        k: v
+        for k, v in payload.items()
+        if k not in frozenset({"is_owner", "chat_id", "user_id"})
+    }
+
+    await base_services.update(session, membership, filtered_payload)
     return (
         await session.execute(
             select(user_membership_join_fields)
@@ -515,30 +476,26 @@ async def remove_member(
     session: AsyncSession, chat_id: int, user_id: int, target_id: int
 ) -> None:
     """Removes given user from chat. If user is not admin raises 403."""
-    is_target_owner = await session.scalar(
-        select([Membership.is_owner]).where(
+    if not await _is_chat_admin(session, user_id, chat_id):
+        raise UserNotAdminException
+
+    membership = await session.scalar(
+        select(Membership).where(
             (Membership.user_id == target_id) & (Membership.chat_id == chat_id)
         )
     )
 
-    if is_target_owner is None:
+    if membership is None:
         raise NotFoundException(
             "Member with given id cannot be found in chat."
         )
-    elif is_target_owner is True:
+    elif membership.is_owner is True:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Owner cannot be removed from group.",
         )
 
-    if not await _is_chat_admin(session, user_id, chat_id):
-        raise UserNotAdminException
-
-    await session.execute(
-        delete(Membership).where(
-            (Membership.user_id == target_id) & (Membership.chat_id == chat_id)
-        )
-    )
+    await session.delete(membership)
     await session.commit()
 
 
@@ -547,7 +504,7 @@ async def list_public_chat_messages(
     chat_id: int,
     user_id: int,
     paginator: BasePaginator | None = None,
-) -> list[Message] | PaginatedResponse[MessageRead]:
+) -> list[Message] | PaginatedResponseDict:
     """Lists messages from public chat,
     if user is not chat member, raises 403."""
     if not await is_chat_member(session, user_id, chat_id):
@@ -571,18 +528,52 @@ async def list_chat_members(
     chat_id: int,
     user_id: int,
     paginator: BasePaginator | None = None,
-) -> list[Row] | PaginatedResponse[MemberRead]:
+) -> list[Row] | PaginatedResponseDict:
     """Lists chat members. If given user is not chat member, raises 403."""
     if not await is_chat_member(session, user_id, chat_id):
         raise UserNotMemberException
 
-    query = (
+    list_chats_query = (
         select(user_membership_join_fields)
         .join(Membership, User.id == Membership.user_id)
         .where(Membership.chat_id == chat_id)
     )
 
     if paginator:
-        return await paginator.get_paginated_response_for_rows(query)
+        return await paginator.get_paginated_response_for_rows(
+            list_chats_query
+        )
 
-    return (await session.execute(query)).all()
+    return (await session.execute(list_chats_query)).all()
+
+
+async def list_user_chats(
+    session: AsyncSession,
+    user_id: int,
+    paginator: BasePaginator,
+    keyword: str | None,
+):
+    """Returns target user's chats. Sorts them by the date of last message."""
+    list_chat_query = (
+        select(Chat)
+        .join(Membership, Membership.chat_id == Chat.id)
+        .options(
+            joinedload(Chat.last_message).joinedload(Message.sender),
+        )
+        .where(Membership.user_id == user_id)
+        .order_by(
+            desc(func.coalesce(Chat.last_message_created_at, datetime.min)),
+            desc(Chat.last_message_created_at),
+        )
+    )
+
+    if keyword:
+        expression = keyword + "%"
+        list_chat_query = list_chat_query.where(Chat.name.like(expression))
+
+    if paginator:
+        return await paginator.get_paginated_response_for_model(
+            list_chat_query
+        )
+
+    return (await session.scalars(list_chat_query)).all()

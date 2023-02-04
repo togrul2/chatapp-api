@@ -10,6 +10,6 @@
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
     "python.formatting.provider": "black",
-    "python.formatting.blackPath": ".venv/Scripts//black",
+    "python.formatting.blackPath": ".venv/bin/black",
     "python.linting.enabled": true,
 }
