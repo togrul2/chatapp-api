@@ -16,7 +16,10 @@ from sqlalchemy.orm import sessionmaker
 
 from src.chatapp_api.auth.jwt import create_access_token, password_context
 from src.chatapp_api.config import BASE_DIR, settings
-from src.chatapp_api.dependencies import get_db, get_staticfiles_manager
+from src.chatapp_api.dependencies import (
+    get_db_session,
+    get_staticfiles_manager,
+)
 from src.chatapp_api.friendship.models import Friendship
 from src.chatapp_api.main import app as fastapi_app
 from src.chatapp_api.staticfiles import LocalStaticFilesManager
@@ -107,7 +110,7 @@ async def test_app(session: AsyncSession):
             "http://localhost:8000", "/static/", TEST_STATIC_ROOT
         )
 
-    fastapi_app.dependency_overrides[get_db] = _get_test_db
+    fastapi_app.dependency_overrides[get_db_session] = _get_test_db
     fastapi_app.dependency_overrides[
         get_staticfiles_manager
     ] = _get_test_staticfiles_manager

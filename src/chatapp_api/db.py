@@ -4,7 +4,6 @@ DB module with database configs and declarations.
 from aioredis import Redis
 from aioredis.exceptions import ConnectionError as RedisConnectionError
 from asyncpg import connect
-from broadcaster import Broadcast  # type: ignore
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -22,9 +21,6 @@ async_session = sessionmaker(
     class_=AsyncSession,
 )
 Base = declarative_base()
-
-# Broadcaster-Redis
-broadcaster = Broadcast(settings.messaging_url)
 
 
 async def ping_sql_database():

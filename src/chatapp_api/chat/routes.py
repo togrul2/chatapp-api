@@ -1,15 +1,15 @@
 """Module with Chat API Routes & Websockets"""
-import asyncio
-
-from fastapi import APIRouter, Depends, Form, WebSocket, status
+from fastapi import APIRouter, Depends, Form, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.chatapp_api.auth.dependencies import (
-    get_current_user_id_from_bearer,
-    get_current_user_id_from_cookie,
-)
+from src.chatapp_api.auth.dependencies import get_current_user_id_from_bearer
 from src.chatapp_api.base.schemas import DetailMessage, PaginatedResponse
 from src.chatapp_api.chat import services as chat_services
+from src.chatapp_api.chat.dependencies import (
+    get_notification_messaging_manager,
+    get_private_chat_messaging_manager,
+    get_public_chat_messaging_manager,
+)
 from src.chatapp_api.chat.schemas import (
     ChatCreate,
     ChatRead,
@@ -21,34 +21,20 @@ from src.chatapp_api.chat.schemas import (
     MembershipUpdate,
     MessageRead,
 )
-from src.chatapp_api.chat.websocket_managers import (
-    ChatMessagesManager,
-    PrivateMessageManager,
-)
-from src.chatapp_api.db import broadcaster
-from src.chatapp_api.dependencies import get_db, get_paginator
+from src.chatapp_api.chat.websocket_managers import Receiver, Sender
+from src.chatapp_api.dependencies import get_db_session, get_paginator
 from src.chatapp_api.paginator import BasePaginator
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
 
-@router.websocket("/chats/privates/connect")
-async def private_messages(
-    websocket: WebSocket,
-    user_id: int = Depends(get_current_user_id_from_cookie),
-    session: AsyncSession = Depends(get_db),
+@router.websocket("/chats/users/{target_id}", name="Private messaging")
+async def private_messaging(
+    manager: Sender | Receiver = Depends(get_private_chat_messaging_manager),
 ):
     """Websocket for sending and receiving private messages."""
-
-    manager = PrivateMessageManager(broadcaster, session, user_id)
-    await websocket.accept()
-    await asyncio.wait(
-        [
-            asyncio.create_task(manager.receiver(websocket)),
-            asyncio.create_task(manager.sender(websocket)),
-        ],
-        return_when=asyncio.FIRST_COMPLETED,
-    )
+    await manager.accept()
+    await manager.run_manager()
 
 
 @router.get(
@@ -64,7 +50,7 @@ async def private_messages(
 async def get_private_messages_from_user(
     target_id: int,
     user_id: int = Depends(get_current_user_id_from_bearer),
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
     paginator: BasePaginator = Depends(get_paginator),
 ):
     """Returns messages with target user."""
@@ -73,29 +59,19 @@ async def get_private_messages_from_user(
     )
 
 
-@router.websocket("/chats/connect/{chat_id}")
-async def chat_messages_websocket_route(
-    chat_id: int,
-    websocket: WebSocket,
-    user_id: int = Depends(get_current_user_id_from_cookie),
-    session: AsyncSession = Depends(get_db),
+@router.websocket("/chats/{chat_id}")
+async def public_chat_messaging(
+    manager: Sender | Receiver = Depends(get_public_chat_messaging_manager),
 ):
     """Websocket route for sending and receiving public chat messages."""
-    manager = ChatMessagesManager(broadcaster, session, user_id, chat_id)
-    await manager.accept(websocket)
-    await asyncio.wait(
-        [
-            asyncio.create_task(manager.receiver(websocket)),
-            asyncio.create_task(manager.sender(websocket)),
-        ],
-        return_when=asyncio.FIRST_COMPLETED,
-    )
+    await manager.accept()
+    await manager.run_manager()
 
 
 @router.get("/chats", response_model=PaginatedResponse[ChatReadWithUsersCount])
 async def list_public_chats(
     keyword: str | None = None,
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
     paginator: BasePaginator = Depends(get_paginator),
 ):
     """List public chats as well as search through them."""
@@ -120,7 +96,7 @@ async def list_public_chats(
 async def create_public_chat(
     chat: ChatCreate,
     user_id: int = Depends(get_current_user_id_from_bearer),
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
 ):
     """Create public chat. Makes creator of chat owner."""
     return await chat_services.create_public_chat(session, user_id, chat)
@@ -137,7 +113,7 @@ async def create_public_chat(
     },
 )
 async def get_public_chat(
-    chat_id: int, session: AsyncSession = Depends(get_db)
+    chat_id: int, session: AsyncSession = Depends(get_db_session)
 ):
     """Get public chat detail with given id.
     If no public chat is found returns 404."""
@@ -160,7 +136,7 @@ async def update_public_chat(
     chat_id: int,
     data: ChatUpdate,
     user_id: int = Depends(get_current_user_id_from_bearer),
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
 ):
     """Update public chat info. If user is not admin, returns 403."""
     return await chat_services.update_chat(session, user_id, chat_id, data)
@@ -179,14 +155,14 @@ async def update_public_chat(
 async def delete_public_chat(
     chat_id: int,
     user_id: int = Depends(get_current_user_id_from_bearer),
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
 ):
     """Deletes chat with given id. If user is not owner, returns 403."""
     await chat_services.delete_chat(session, user_id, chat_id)
 
 
 @router.post(
-    "/chats/{chat_id}/generate-invite-token",
+    "/chats/{chat_id}/invite-token",
     response_model=str,
     responses={
         status.HTTP_403_FORBIDDEN: {
@@ -197,7 +173,7 @@ async def delete_public_chat(
 )
 async def get_invite_link_for_chat(
     chat_id: int,
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
     user_id: int = Depends(get_current_user_id_from_bearer),
 ):
     """Generates and returns invite link for chat with expiration link."""
@@ -223,7 +199,7 @@ async def get_invite_link_for_chat(
 async def enroll_into_chat(
     chat_id: int,
     token: str = Form(alias="t"),
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
     user_id: int = Depends(get_current_user_id_from_bearer),
 ):
     """Enrolls user into chat.
@@ -251,7 +227,7 @@ async def update_user_membership(
     chat_id: int,
     target_id: int,
     payload: MembershipUpdate,
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
     user_id: int = Depends(get_current_user_id_from_bearer),
 ):
     """Updates user membership info in chat (is_admin).
@@ -275,7 +251,7 @@ async def update_user_membership(
 async def remove_user_from_chat(
     chat_id: int,
     target_id: int,
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
     user_id: int = Depends(get_current_user_id_from_bearer),
 ):
     """Removes user from chat. If non admin user, returns 403 error code."""
@@ -294,7 +270,7 @@ async def remove_user_from_chat(
 )
 async def list_chat_messages(
     chat_id: int,
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
     user_id: int = Depends(get_current_user_id_from_bearer),
     paginator: BasePaginator = Depends(get_paginator),
 ):
@@ -317,7 +293,7 @@ async def list_chat_messages(
 )
 async def list_chat_members(
     chat_id: int,
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
     user_id: int = Depends(get_current_user_id_from_bearer),
     paginator: BasePaginator = Depends(get_paginator),
 ):
@@ -335,10 +311,19 @@ async def list_chat_members(
 async def list_user_chats(
     keyword: str | None = None,
     user_id: int = Depends(get_current_user_id_from_bearer),
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
     paginator: BasePaginator = Depends(get_paginator),
 ):
     """Returns auth user's chats sorted by the date of their last message."""
     return await chat_services.list_user_chats(
         session, user_id, paginator, keyword
     )
+
+
+@router.websocket("/chats/notifications", name="Notifications receiver")
+async def get_notifications(
+    manager: Sender = Depends(get_notification_messaging_manager),
+):
+    """Websocket route for getting notifications for new messages."""
+    await manager.accept()
+    await manager.run_manager()

@@ -5,7 +5,6 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import jwt
 from passlib.context import CryptContext
 
-from src.chatapp_api.auth.utils import OAuth2PasswordBearerWithCookie
 from src.chatapp_api.config import (
     JWT_ACCESS_TOKEN_EXPIRE,
     JWT_ALGORITHM,
@@ -14,12 +13,7 @@ from src.chatapp_api.config import (
 )
 
 password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/token")  # nosec: B106
-
-oauth2_cookie_scheme = OAuth2PasswordBearerWithCookie(  # nosec: B106
-    token_url="api/token"
-)
 
 
 class AuthTokenTypes(str, Enum):
@@ -30,7 +24,7 @@ class AuthTokenTypes(str, Enum):
 
 
 def _create_auth_token(
-    type_: AuthTokenTypes, expires_delta: timedelta, user_id: int
+    token_type: AuthTokenTypes, expires_delta: timedelta, user_id: int
 ) -> str:
     """
     Base function for creating authentication tokens
@@ -40,12 +34,9 @@ def _create_auth_token(
     payload = {
         "user_id": user_id,
         "expire": expire.isoformat(),
-        "type": type_,
+        "type": token_type,
     }
-    encoded_jwt = jwt.encode(
-        payload, settings.secret_key, algorithm=JWT_ALGORITHM
-    )
-    return encoded_jwt
+    return jwt.encode(payload, settings.secret_key, algorithm=JWT_ALGORITHM)
 
 
 def create_access_token(user_id: int) -> str:

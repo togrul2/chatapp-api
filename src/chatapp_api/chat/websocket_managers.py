@@ -1,90 +1,156 @@
 """Websocket managers for chat related routes"""
+import asyncio
 import json
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from typing import Literal, Protocol, cast
 
 from broadcaster import Broadcast  # type: ignore
-from fastapi import WebSocket
+from fastapi import WebSocket, WebSocketDisconnect
+from pydantic import BaseModel, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.chatapp_api.base import services as base_services
 from src.chatapp_api.chat import services as chat_services
-from src.chatapp_api.chat.exceptions import WebSocketChatDoesNotExist
+from src.chatapp_api.chat.exceptions import (
+    AuthUserNotFoundWebSocketException,
+    TargetUserNotFoundWebSocketException,
+    WebSocketChatDoesNotExist,
+)
 from src.chatapp_api.chat.models import Chat, Message
 from src.chatapp_api.user import services as user_services
 from src.chatapp_api.user.schemas import UserRead
 
 
+class MessageBody(BaseModel):
+    """Pyndatic model for validating message payload in websockets managers."""
+
+    type: Literal["message"]
+    message: str
+
+
+class WebsocketManager(Protocol):
+    """Interface for websocket managers"""
+
+    async def accept(self) -> None:
+        ...
+
+    async def run_manager(self) -> None:
+        ...
+
+
+class Sender(WebsocketManager):
+    """Interface for sender websocket managers"""
+
+    async def sender(self) -> None:
+        ...
+
+
+class Receiver(WebsocketManager):
+    """Interface for receiver websocket managers"""
+
+    async def receiver(self) -> None:
+        ...
+
+
 @dataclass
-class BasePubSubManager(ABC):
+class BasePubSubManager(Sender, Receiver):
     """Base class for redis publish/subscribe logic."""
 
     broadcaster: Broadcast
-    session: AsyncSession
+    websocket: WebSocket
 
-    @abstractmethod
-    async def receiver(self, websocket: WebSocket) -> None:
-        """Consumer coroutine"""
+    async def accept(self) -> None:
+        """Accepts given websocket connection."""
+        await self.websocket.accept()
 
-    @abstractmethod
-    async def sender(self, websocket: WebSocket) -> None:
-        """Producer coroutine"""
+    async def run_manager(self) -> None:
+        """Concurrently runs receiver and producer."""
+        await asyncio.wait(
+            [
+                asyncio.create_task(self.receiver()),
+                asyncio.create_task(self.sender()),
+            ],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
 
 
 @dataclass
-class PrivateMessageManager(BasePubSubManager):
-    """Private messages' pub/sub manager.
-    Manages message channels and routing."""
+class PrivateChatMessagingManager(BasePubSubManager):
+    """Private messages pub/sub manager.
+    Manages messaging between two users."""
 
+    session: AsyncSession
     user_id: int
+    target_id: int
     chat: Chat | None = field(init=False, default=None)
 
     @staticmethod
-    def get_channel_for_user(user_id: int):
+    def _get_channel_for_user(user_id: int):
         """Returns channel name for given user id"""
         return f"private-chat:user-{user_id}"
 
-    async def receiver(self, websocket: WebSocket) -> None:
-        async for body in websocket.iter_json():
+    async def accept(self):
+        if await user_services.get_by_id(self.session, self.user_id) is None:
+            raise AuthUserNotFoundWebSocketException
 
-            # TODO: validate with pydantic
-            if not frozenset({"message", "to", "type"}).issubset(body.keys()):
-                return
+        if await user_services.get_by_id(self.session, self.target_id) is None:
+            raise TargetUserNotFoundWebSocketException
 
-            user_channel = self.get_channel_for_user(body["to"])
-            chat = await chat_services.get_or_create_private_chat(
-                self.session, body["to"], self.user_id
-            )
-            await base_services.create(
-                self.session,
-                Message(
-                    chat_id=chat.id,
-                    sender_id=self.user_id,
-                    body=body["message"],
-                ),
-            )
+        self.chat, _ = await chat_services.get_or_create_private_chat(
+            self.session, self.user_id, self.target_id
+        )
+        await super().accept()
 
-            body["from"] = UserRead.from_orm(
-                await user_services.get_by_id(self.session, self.user_id)
-            ).dict()
-            await self.broadcaster.publish(
-                channel=user_channel, message=json.dumps(body)
-            )
+    async def receiver(self) -> None:
+        try:
+            async for body in self.websocket.iter_json():
+                try:
+                    MessageBody(**body)
+                except ValidationError:
+                    return
 
-    async def sender(self, websocket: WebSocket) -> None:
-        async with self.broadcaster.subscribe(
-            self.get_channel_for_user(self.user_id)
-        ) as subscriber:
-            async for event in subscriber:
-                body = json.loads(event.message)
+                await base_services.create(
+                    self.session,
+                    Message(
+                        chat_id=cast(Chat, self.chat).id,
+                        sender_id=self.user_id,
+                        body=body["message"],
+                    ),
+                )
 
-                match body.get("type"):
-                    case "message":
-                        await websocket.send_json(body)
+                body["from"] = UserRead.from_orm(
+                    await user_services.get_by_id(self.session, self.user_id)
+                ).dict()
+                # TODO: send notification
+                await self.broadcaster.publish(
+                    channel=self._get_channel_for_user(self.target_id),
+                    message=json.dumps(body),
+                )
+        except WebSocketDisconnect:
+            ...
+
+    async def sender(self) -> None:
+        try:
+            async with self.broadcaster.subscribe(
+                self._get_channel_for_user(self.user_id)
+            ) as subscriber:
+                async for event in subscriber:
+                    body = json.loads(event.message)
+
+                    match body.get("type"):
+                        case "message":
+                            await self.websocket.send_json(body)
+        except WebSocketDisconnect:
+            ...
 
 
 @dataclass
-class ChatMessagesManager(BasePubSubManager):
+class PublicChatMessagingManager(BasePubSubManager):
+    """Public chat messaging manager.
+    Manages messaging between public chat members."""
+
+    websocket: WebSocket
+    session: AsyncSession
     user_id: int
     chat_id: int
 
@@ -92,7 +158,7 @@ class ChatMessagesManager(BasePubSubManager):
         """Returns set chat channel name."""
         return f"public-chat:chat-{self.chat_id}"
 
-    async def accept(self, websocket: WebSocket) -> None:
+    async def accept(self) -> None:
         """Accepts given websocket connection.
         If user is not Chat member refuses."""
         if not await chat_services.is_chat_member(
@@ -100,13 +166,13 @@ class ChatMessagesManager(BasePubSubManager):
         ):
             raise WebSocketChatDoesNotExist
 
-        await websocket.accept()
+        await super().accept()
 
-    async def receiver(self, websocket: WebSocket) -> None:
-        async for body in websocket.iter_json():
-
-            # TODO: validate with pydantic
-            if not frozenset({"message", "type"}).issubset(body.keys()):
+    async def receiver(self) -> None:
+        async for body in self.websocket.iter_json():
+            try:
+                MessageBody(**body)
+            except ValidationError:
                 return
 
             await base_services.create(
@@ -121,12 +187,14 @@ class ChatMessagesManager(BasePubSubManager):
             body["from"] = UserRead.from_orm(
                 await user_services.get_by_id(self.session, self.user_id)
             ).dict()
+            # TODO: send notifications
+
             await self.broadcaster.publish(
                 channel=self._get_current_chat_channel(),
                 message=json.dumps(body),
             )
 
-    async def sender(self, websocket: WebSocket) -> None:
+    async def sender(self) -> None:
         async with self.broadcaster.subscribe(
             self._get_current_chat_channel()
         ) as subscriber:
@@ -136,4 +204,36 @@ class ChatMessagesManager(BasePubSubManager):
                 match body.get("type"):
                     case "message":
                         if body["from"]["id"] != self.user_id:
-                            await websocket.send_json(body)
+                            await self.websocket.send_json(body)
+
+
+@dataclass
+class NotificationsMessagingManager(Sender):
+    """Messaging manager for obtaining notifications."""
+
+    broadcaster: Broadcast
+    websocket: WebSocket
+    session: AsyncSession
+    user_id: int
+
+    def _get_current_user_channel(self):
+        return f"notifications:user-{self.user_id}"
+
+    async def accept(self) -> None:
+        if await user_services.get_by_id(self.session, self.user_id) is None:
+            raise AuthUserNotFoundWebSocketException
+
+        await self.websocket.accept()
+
+    async def sender(self) -> None:
+        async with self.broadcaster.subscribe(
+            self._get_current_user_channel()
+        ) as subscriber:
+            async for event in subscriber:
+                body = json.loads(event.message)
+
+                if body.get("type") == "notification":
+                    await self.websocket.send_json(body)
+
+    async def run_manager(self) -> None:
+        await self.sender()

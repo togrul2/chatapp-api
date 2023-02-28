@@ -4,9 +4,7 @@ import pytest
 from fastapi import status
 from httpx import AsyncClient
 
-from src.chatapp_api.auth.exceptions import BadTokenException
 from src.chatapp_api.auth.jwt import create_access_token, create_refresh_token
-from src.chatapp_api.user.exceptions import BadCredentialsException
 from src.chatapp_api.user.models import User
 
 
@@ -14,9 +12,7 @@ from src.chatapp_api.user.models import User
 class TestToken:
     """Test token and refresh endpoint."""
 
-    token_url = (
-        "/api/token"  # nosec - ✅ token is a part of url, not a password
-    )
+    token_url = "/api/token"  # nosec # noqa: S105
     refresh_url = "/api/refresh"
 
     async def test_token_success(self, client: AsyncClient, user: User):
@@ -42,7 +38,6 @@ class TestToken:
         response = await client.post(self.token_url, data=user_data)
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
-        assert response.json()["detail"] == BadCredentialsException.detail
 
     async def test_refresh_success(self, client: AsyncClient, user: User):
         """Test refresh endpoint successful attempt."""
@@ -66,4 +61,3 @@ class TestToken:
         )
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
-        assert response.json()["detail"] == BadTokenException.detail

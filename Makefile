@@ -1,3 +1,5 @@
+export READ_ENV_FROM_FILE=1
+
 help:
 	@echo "-----------------HELP-----------------"
 	@echo "this project requires poetry for building."

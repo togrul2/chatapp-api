@@ -9,7 +9,7 @@ from src.chatapp_api import utils
 from src.chatapp_api.auth.dependencies import get_current_user_id_from_bearer
 from src.chatapp_api.base.schemas import DetailMessage, PaginatedResponse
 from src.chatapp_api.dependencies import (
-    get_db,
+    get_db_session,
     get_paginator,
     get_staticfiles_manager,
 )
@@ -30,7 +30,7 @@ router = APIRouter(prefix="/api", tags=["user"])
 @router.get("/users", response_model=PaginatedResponse[UserRead])
 async def list_users(
     keyword: str | None = None,
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
     paginator: BasePaginator = Depends(get_paginator),
 ):
     """
@@ -54,7 +54,7 @@ async def list_users(
     },
 )
 async def create_user(
-    payload: UserCreate, session: AsyncSession = Depends(get_db)
+    payload: UserCreate, session: AsyncSession = Depends(get_db_session)
 ):
     """
     Create a user in database with given data:
@@ -83,7 +83,7 @@ async def create_user(
 )
 async def get_auth_user(
     user_id: int = Depends(get_current_user_id_from_bearer),
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
 ):
     """Returns authenticated user's data.
     Returns 401 error code if unauthenticated."""
@@ -111,7 +111,7 @@ async def get_auth_user(
 async def update_auth_user(
     data: UserBase,
     user_id: int = Depends(get_current_user_id_from_bearer),
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
 ):
     """
     Updates authenticated user's data,
@@ -144,7 +144,7 @@ async def update_auth_user(
 async def partial_update_auth_user(
     data: UserPartialUpdate,
     user_id: int = Depends(get_current_user_id_from_bearer),
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
 ):
     """
     Partially updates authenticated user's data,
@@ -172,7 +172,7 @@ async def partial_update_auth_user(
 )
 async def delete_auth_user(
     user_id: int = Depends(get_current_user_id_from_bearer),
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
 ):
     """Deletes authenticated user's data or returns 401 if unauthenticated."""
     await user_services.delete_user(session, user_id)
@@ -199,7 +199,7 @@ async def delete_auth_user(
 async def upload_profile_picture(
     profile_picture: UploadFile,
     user_id: int = Depends(get_current_user_id_from_bearer),
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
     staticfiles_manager: BaseStaticFilesManager = Depends(
         get_staticfiles_manager
     ),
@@ -244,7 +244,7 @@ async def upload_profile_picture(
 )
 async def remove_profile_picture(
     user_id: int = Depends(get_current_user_id_from_bearer),
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
 ):
     """Remove profile picture for authenticated user."""
     return await user_services.remove_profile_picture(session, user_id)
@@ -262,7 +262,7 @@ async def remove_profile_picture(
 )
 async def get_user_by_id(
     user_id: int,
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
 ):
     """
     Returns user with corresponding username or returns 404 error.
@@ -282,7 +282,7 @@ async def get_user_by_id(
     },
 )
 async def get_user_by_username(
-    username: str, session: AsyncSession = Depends(get_db)
+    username: str, session: AsyncSession = Depends(get_db_session)
 ):
     """
     Returns user with corresponding username or returns 404 error.

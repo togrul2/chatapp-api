@@ -140,24 +140,27 @@ async def _get_private_chat(
 
 async def get_or_create_private_chat(
     session: AsyncSession, user1_id: int, user2_id: int
-) -> Chat:
-    """Returns private chat of given two users.
-    If it doesn't exist, creates it."""
+) -> tuple[Chat, bool]:
+    """Returns private chat of given two users and
+    boolean indicating whether it was created or not.
+    If chat for given user doesn't exist, it will be created."""
     chat = await _get_private_chat(session, user1_id, user2_id)
 
     if chat is None:
-        return await _create_chat(
-            session,
-            {
-                "private": True,
-                "users": [
-                    {"id": user1_id, "is_admin": True},
-                    {"id": user2_id, "is_admin": True},
-                ],
-            },
-        )
+        return (
+            await _create_chat(
+                session,
+                {
+                    "private": True,
+                    "users": [
+                        {"id": user1_id, "is_admin": True},
+                        {"id": user2_id, "is_admin": True},
+                    ],
+                },
+            )
+        ), True
 
-    return chat
+    return chat, False
 
 
 async def create_message(
@@ -522,6 +525,7 @@ async def list_public_chat_messages(
         .options(joinedload(Message.sender), defer("sender_id"))
         .where(Message.chat_id == chat_id)
         .order_by(Message.created_at.desc())
+        .distinct()
     )
 
     if paginator:
@@ -544,6 +548,7 @@ async def list_chat_members(
         select(user_membership_join_fields)
         .join(Membership, User.id == Membership.user_id)
         .where(Membership.chat_id == chat_id)
+        .distinct()
     )
 
     if paginator:

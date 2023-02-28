@@ -17,7 +17,7 @@ ALLOWED_HEADERS = "*"
 SRC_DIR = Path(__file__).resolve().parent.parent  # /src
 BASE_DIR = SRC_DIR.parent
 
-if bool(os.getenv("READ_FROM_FILE")) is True:
+if bool(os.getenv("READ_ENV_FROM_FILE")) is True:
     load_dotenv(BASE_DIR / ".env")
 
 # JWT
@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     """Settings for env variables."""
 
     secret_key: str
+    allowed_origins: list[str]
+    allowed_methods: list[str]
+    allowed_headers: list[str]
+
     database_url: str
     messaging_url: str
 

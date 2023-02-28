@@ -1,15 +1,22 @@
 {
     "[python]": {
-        "editor.codeActionsOnSave": {"source.organizeImports": true},
-        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": true
+        },
+        "editor.formatOnSave": true
     },
     "python.poetryPath": "C:/Users/user/AppData/Roaming/pypoetry/venv/Scripts/poetry.exe",
     "python.linting.pylintPath": ".venv/Scripts/flake8",
+    "python.linting.flake8Args": [
+        "--ignore=S101"
+    ],
     "python.analysis.typeCheckingMode": "off",
-    "python.testing.pytestArgs": ["tests"],
+    "python.testing.pytestArgs": [
+        "tests"
+    ],
     "python.testing.unittestEnabled": false,
     "python.testing.pytestEnabled": true,
     "python.formatting.provider": "black",
     "python.formatting.blackPath": ".venv/bin/black",
-    "python.linting.enabled": true,
+    "python.linting.enabled": true
 }

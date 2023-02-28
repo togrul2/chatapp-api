@@ -5,18 +5,8 @@ from fastapi.staticfiles import StaticFiles
 
 from src.chatapp_api.auth.routes import router as auth_router
 from src.chatapp_api.chat.routes import router as chat_router
-from src.chatapp_api.config import (
-    ALLOWED_HEADERS,
-    ALLOWED_METHODS,
-    ALLOWED_ORIGINS,
-    STATIC_ROOT,
-    STATIC_URL,
-)
-from src.chatapp_api.db import (
-    broadcaster,
-    ping_redis_database,
-    ping_sql_database,
-)
+from src.chatapp_api.config import STATIC_ROOT, STATIC_URL, settings
+from src.chatapp_api.db import ping_redis_database, ping_sql_database
 from src.chatapp_api.friendship.routes import router as friendship_router
 from src.chatapp_api.user.routes import router as user_router
 
@@ -33,8 +23,7 @@ app = FastAPI(
         "name": "Togrul Asadov",
         "github": "https://github.com/togrul2",
     },
-    on_startup=[ping_sql_database, ping_redis_database, broadcaster.connect],
-    on_shutdown=[broadcaster.disconnect],
+    on_startup=[ping_sql_database, ping_redis_database],
 )
 
 app.mount(
@@ -45,10 +34,10 @@ app.mount(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[ALLOWED_ORIGINS],
+    allow_origins=settings.allowed_origins,
     allow_credentials=True,
-    allow_methods=[ALLOWED_METHODS],
-    allow_headers=[ALLOWED_HEADERS],
+    allow_methods=settings.allowed_methods,
+    allow_headers=settings.allowed_headers,
 )
 
 # Routes

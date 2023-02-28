@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.chatapp_api.auth import services as auth_services
 from src.chatapp_api.auth.schemas import RefreshTokenDto, UserWithTokens
 from src.chatapp_api.base.schemas import DetailMessage
-from src.chatapp_api.dependencies import get_db
+from src.chatapp_api.dependencies import get_db_session
 
 router = APIRouter(prefix="/api", tags=["auth"])
 
@@ -23,7 +23,7 @@ router = APIRouter(prefix="/api", tags=["auth"])
 )
 async def token(
     credentials: OAuth2PasswordRequestForm = Depends(),
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
 ):
     """
     Creates access and refresh token for user:
@@ -49,7 +49,7 @@ async def token(
 )
 async def refresh(
     dto: RefreshTokenDto,
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
 ):
     """
     Creates access & refresh tokens based on refresh token.

@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.chatapp_api.auth.dependencies import get_current_user_id_from_bearer
 from src.chatapp_api.base.schemas import DetailMessage, PaginatedResponse
-from src.chatapp_api.dependencies import get_db, get_paginator
+from src.chatapp_api.dependencies import get_db_session, get_paginator
 from src.chatapp_api.friendship import services as friendship_services
 from src.chatapp_api.friendship.schemas import (
     FriendshipRead,
@@ -30,7 +30,7 @@ router = APIRouter(
 )
 async def get_pending_requests(
     user_id: int = Depends(get_current_user_id_from_bearer),
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
     paginator: BasePaginator = Depends(get_paginator),
 ):
     """Returns list of user's friendship requests pending for response."""
@@ -51,7 +51,7 @@ async def get_pending_requests(
 )
 async def get_request(
     target_id: int,
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
     user_id: int = Depends(get_current_user_id_from_bearer),
 ):
     """Returns friendship with given user."""
@@ -73,7 +73,7 @@ async def get_request(
 )
 async def send_request(
     target_id: int,
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
     user_id: int = Depends(get_current_user_id_from_bearer),
 ):
     """
@@ -95,7 +95,7 @@ async def send_request(
 )
 async def accept_request(
     target_id: int,
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
     user_id: int = Depends(get_current_user_id_from_bearer),
 ):
     """
@@ -117,7 +117,7 @@ async def accept_request(
 )
 async def delete_friendship(
     target_id: int,
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
     user_id: int = Depends(get_current_user_id_from_bearer),
 ):
     """Deletes friendship with given user if it exists."""
@@ -127,7 +127,7 @@ async def delete_friendship(
 @router.get("/friends", response_model=PaginatedResponse[UserRead])
 async def list_friends(
     user_id: int = Depends(get_current_user_id_from_bearer),
-    session: AsyncSession = Depends(get_db),
+    session: AsyncSession = Depends(get_db_session),
     paginator: BasePaginator = Depends(get_paginator),
 ):
     """Returns list of friends."""
