@@ -1,12 +1,14 @@
 """
 DB module with database configs and declarations.
 """
+from typing import cast
+
 from aioredis import Redis
 from aioredis.exceptions import ConnectionError as RedisConnectionError
 from asyncpg import connect
+from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from src.chatapp_api import utils
 from src.chatapp_api.config import settings
@@ -14,13 +16,12 @@ from src.chatapp_api.config import settings
 # PostgreSQL
 engine = create_async_engine(settings.database_url)
 async_session = sessionmaker(
-    autocommit=False,
-    expire_on_commit=False,
+    cast(Engine, engine),
+    class_=cast(Session, AsyncSession),
     autoflush=False,
-    bind=engine,
-    class_=AsyncSession,
+    expire_on_commit=False,
+    autocommit=False,
 )
-Base = declarative_base()
 
 
 async def ping_sql_database():

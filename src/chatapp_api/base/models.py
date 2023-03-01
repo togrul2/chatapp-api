@@ -1,28 +1,24 @@
 """Base model class and utils."""
-from collections.abc import Sequence
+from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Integer, func
+from sqlalchemy import func
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from src.chatapp_api.db import Base
 
-
-class CustomBase(Base):
+class CustomBase(DeclarativeBase):
     """Base class for models"""
 
     __abstract__ = True
-    __repr_fields__: Sequence[str] = ("id",)
 
-    id = Column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
 
     def __str__(self):
         return self.__repr__()
 
     def __repr__(self):
         attrs = ", ".join(
-            tuple(
-                f"{field}: {getattr(self, field)}"
-                for field in self.__repr_fields__
-            )
+            f"{field}: {getattr(self, field)}"
+            for field in self.__repr_fields__
         )
         return f"{self.__class__.__name__}({attrs})"
 
@@ -36,7 +32,7 @@ class CreateTimestampMixin(CustomBase):
 
     __abstract__ = True
 
-    created_at = Column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
 class CreateUpdateTimestampMixin(CreateTimestampMixin):
@@ -47,4 +43,5 @@ class CreateUpdateTimestampMixin(CreateTimestampMixin):
     """
 
     __abstract__ = True
-    modified_at = Column(DateTime, onupdate=func.now())
+
+    modified_at: Mapped[datetime] = mapped_column(onupdate=func.now())

@@ -71,9 +71,11 @@ class BasePaginator(ABC):
         self, query: Select | CompoundSelect
     ) -> int:
         """Calculates total number of records in table."""
-        return await self.session.scalar(
-            select([func.count()]).select_from(query.subquery())
-        )
+        return (
+            await self.session.scalar(
+                select(func.count()).select_from(query.subquery())
+            )
+        ) or 0
 
     def _response(
         self, results: Sequence[CustomBase] | Sequence[Row]
@@ -97,7 +99,7 @@ class BasePaginator(ABC):
 
     async def get_paginated_response_for_model(
         self, paginated_query: Select | CompoundSelect
-    ):
+    ) -> PaginatedResponseDict:
         """
         Returns pydantic response with pagination
         applied to query of orm model. Basically
@@ -118,7 +120,7 @@ class BasePaginator(ABC):
 
     async def get_paginated_response_for_rows(
         self, paginated_query: Select | CompoundSelect
-    ):
+    ) -> PaginatedResponseDict:
         """
         Returns pydantic response with pagination applied to query of Row.
         Basically this method is for cases when scalar() is not used

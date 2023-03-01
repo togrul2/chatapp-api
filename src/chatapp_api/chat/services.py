@@ -1,11 +1,11 @@
 """DB services for chat related models & routes."""
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timedelta
 from typing import Any, TypedDict, cast
 
 from fastapi import HTTPException, status
 from jose import JWTError, jwt
-from sqlalchemy import Boolean, Column, delete, desc, exists, func, select
+from sqlalchemy import Column, and_, delete, desc, exists, func, select
 from sqlalchemy.engine import Row
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,19 +29,6 @@ from src.chatapp_api.config import (
     settings,
 )
 from src.chatapp_api.paginator import BasePaginator, PaginatedResponseDict
-from src.chatapp_api.user.models import User
-
-user_membership_join_fields = (
-    User.id,
-    User.username,
-    User.email,
-    User.first_name,
-    User.last_name,
-    User.profile_picture,
-    Membership.is_owner,
-    Membership.is_admin,
-    Membership.chat_id,
-)
 
 
 class MemberCreateDict(TypedDict):
@@ -178,7 +165,7 @@ async def list_private_chat_messages(
     user_id: int,
     target_id: int,
     paginator: BasePaginator | None = None,
-) -> PaginatedResponseDict | list[Message]:
+) -> Sequence[Message] | PaginatedResponseDict:
     """Returns messages from a private chat with a given id."""
     if (chat := await _get_private_chat(session, user_id, target_id)) is None:
         raise NotFoundException(
@@ -206,7 +193,7 @@ async def _validate_not_null_unique_chat_name(
     Also checks whether this name belongs to target chat if it exists.
     If some check fails raises http exception"""
     matching_chat: bool = await session.scalar(
-        exists().where((Chat.name == name) & (Chat.id != chat_id)).select()
+        exists().where(and_(Chat.name == name, Chat.id != chat_id)).select()
     )
 
     if matching_chat:
@@ -217,7 +204,7 @@ async def list_chats(
     session: AsyncSession,
     paginator: BasePaginator | None = None,
     keyword: str | None = None,
-) -> PaginatedResponseDict | list[Row]:
+) -> Sequence[Row] | PaginatedResponseDict:
     """Returns list of all records.
     If keyword passed returns matching chats only."""
     query = (
@@ -302,18 +289,18 @@ async def _check_chat_member(
     session: AsyncSession,
     user_id: int,
     chat_id: int,
-    role: Column[Boolean] | None = None,
+    role: bool | None = None,
 ) -> bool:
     """Returns whether set user is member of chat and
     has given role(optional) or not."""
     query = exists().where(
-        (Membership.chat_id == chat_id) & (Membership.user_id == user_id)
+        and_(Membership.chat_id == chat_id, Membership.user_id == user_id)
     )
 
     if role:
         query = query.where(role == True)  # noqa: E712
 
-    return await session.scalar(query.select())
+    return (await session.scalar(query.select())) or 0
 
 
 async def _is_chat_admin(
@@ -406,7 +393,7 @@ async def enroll_user_with_token(
     if await session.scalar(
         exists()
         .where(
-            (Membership.user_id == user_id) & (Membership.chat_id == chat_id)
+            and_(Membership.user_id == user_id, Membership.chat_id == chat_id)
         )
         .select()
     ):
@@ -423,11 +410,11 @@ async def enroll_user_with_token(
     except JWTError as exc:
         raise BadInviteTokenException from exc
 
-    if not (
-        body["type"] == "chat-invitation"
-        and datetime.fromisoformat(body["expire"]) > datetime.utcnow()
-        and chat_id == body["chat_id"]
-    ):
+    is_chat_invitation_type = body["type"] == "chat-invitation"
+    is_expired = datetime.fromisoformat(body["expire"]) > datetime.utcnow()
+    is_target_chat = chat_id == body["chat_id"]
+
+    if not (is_chat_invitation_type and is_expired and is_target_chat):
         raise BadInviteTokenException
 
     return await base_services.create(
@@ -457,7 +444,9 @@ async def update_membership(
 
     membership = await session.scalar(
         select(Membership).where(
-            (Membership.user_id == target_id) & (Membership.chat_id == chat_id)
+            and_(
+                Membership.user_id == target_id, Membership.chat_id == chat_id
+            )
         )
     )
 
@@ -473,13 +462,15 @@ async def update_membership(
     }
 
     await base_services.update(session, membership, filtered_payload)
-    return (
-        await session.execute(
-            select(user_membership_join_fields)
-            .join(Membership, User.id == Membership.user_id)
-            .where(User.id == target_id, Membership.chat_id == chat_id)
+    return await session.scalar(
+        select(Membership)
+        .options(joinedload(Membership.user))
+        .where(
+            and_(
+                Membership.user_id == target_id, Membership.chat_id == chat_id
+            )
         )
-    ).one()
+    )
 
 
 async def remove_member(
@@ -491,7 +482,9 @@ async def remove_member(
 
     membership = await session.scalar(
         select(Membership).where(
-            (Membership.user_id == target_id) & (Membership.chat_id == chat_id)
+            and_(
+                Membership.user_id == target_id, Membership.chat_id == chat_id
+            )
         )
     )
 
@@ -514,7 +507,7 @@ async def list_public_chat_messages(
     chat_id: int,
     user_id: int,
     paginator: BasePaginator | None = None,
-) -> list[Message] | PaginatedResponseDict:
+) -> Sequence[Message] | PaginatedResponseDict:
     """Lists messages from public chat,
     if user is not chat member, raises 403."""
     if not await is_chat_member(session, user_id, chat_id):
@@ -539,24 +532,24 @@ async def list_chat_members(
     chat_id: int,
     user_id: int,
     paginator: BasePaginator | None = None,
-) -> list[Row] | PaginatedResponseDict:
+) -> Sequence[Row] | PaginatedResponseDict:
     """Lists chat members. If given user is not chat member, raises 403."""
     if not await is_chat_member(session, user_id, chat_id):
         raise UserNotMemberException
 
     list_chats_query = (
-        select(user_membership_join_fields)
-        .join(Membership, User.id == Membership.user_id)
+        select(Membership)
+        .options(joinedload(Membership.user))
         .where(Membership.chat_id == chat_id)
         .distinct()
     )
 
     if paginator:
-        return await paginator.get_paginated_response_for_rows(
+        return await paginator.get_paginated_response_for_model(
             list_chats_query
         )
 
-    return (await session.execute(list_chats_query)).all()
+    return (await session.scalars(list_chats_query)).all()
 
 
 async def list_user_chats(
@@ -566,7 +559,8 @@ async def list_user_chats(
     keyword: str | None,
 ):
     """Returns target user's chats. Sorts them by the date of last message."""
-    list_chat_query = (
+
+    list_chats_query = (
         select(Chat)
         .join(Membership, Membership.chat_id == Chat.id)
         .options(
@@ -581,11 +575,11 @@ async def list_user_chats(
 
     if keyword:
         expression = keyword + "%"
-        list_chat_query = list_chat_query.where(Chat.name.like(expression))
+        list_chats_query = list_chats_query.where(Chat.name.like(expression))
 
     if paginator:
         return await paginator.get_paginated_response_for_model(
-            list_chat_query
+            list_chats_query
         )
 
-    return (await session.scalars(list_chat_query)).all()
+    return (await session.scalars(list_chats_query)).all()

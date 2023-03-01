@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from asyncpg import Connection, connect
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from src.chatapp_api.db import Base
+from src.chatapp_api.base.models import CustomBase
 
 
 @dataclass
@@ -93,10 +93,10 @@ class PostgreSQLAsyncManager(DBSQLAsyncManager):
 async def create_tables(test_engine: AsyncEngine) -> None:
     """Creates all the tables in the binded to the engine database."""
     async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(CustomBase.metadata.create_all)
 
 
 async def drop_tables(test_engine: AsyncEngine) -> None:
     """Drops all the tables in the binded to the engine database."""
     async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(CustomBase.metadata.create_all)

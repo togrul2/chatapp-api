@@ -1,34 +1,35 @@
 """Friendship services module."""
-from sqlalchemy import delete, select
+from collections.abc import Sequence
+
+from sqlalchemy import and_, delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer, joinedload
 
 from src.chatapp_api.base import services as base_services
 from src.chatapp_api.base.exceptions import NotFoundException
-from src.chatapp_api.base.schemas import PaginatedResponse
 from src.chatapp_api.friendship.exceptions import (
     RequestAlreadySent,
     RequestWithYourself,
 )
 from src.chatapp_api.friendship.models import Friendship
-from src.chatapp_api.friendship.schemas import FriendshipReadWithSender
-from src.chatapp_api.paginator import BasePaginator
+from src.chatapp_api.paginator import BasePaginator, PaginatedResponseDict
 from src.chatapp_api.user import services as user_services
 from src.chatapp_api.user.models import User
-from src.chatapp_api.user.schemas import UserRead
 
 
 async def list_pending_friendships(
     session: AsyncSession, user_id: int, paginator: BasePaginator | None = None
-) -> list[Friendship] | PaginatedResponse[FriendshipReadWithSender]:
+) -> Sequence[Friendship] | PaginatedResponseDict:
     """List of users pending requests."""
     user = await user_services.get_or_404(session, user_id)
     query = (
         select(Friendship)
-        .options(joinedload(Friendship.sender), defer("sender_id"))
+        .options(joinedload(Friendship.sender), defer(Friendship.sender_id))
         .where(
-            (Friendship.receiver_id == user.id)
-            & (Friendship.accepted == None)  # noqa: E711
+            and_(
+                Friendship.receiver_id == user.id,
+                Friendship.accepted == None,  # noqa: E711
+            )
         )
     )
 
@@ -40,14 +41,16 @@ async def list_pending_friendships(
 
 async def list_friends(
     session: AsyncSession, user_id: int, paginator: BasePaginator | None = None
-) -> list[User] | PaginatedResponse[UserRead]:
+) -> Sequence[User] | PaginatedResponseDict:
     """List of all friends user has."""
     sent_query = (
         select(User)
         .join(Friendship, User.id == Friendship.receiver_id)
         .where(
-            (Friendship.sender_id == user_id)
-            & (Friendship.accepted == True)  # noqa: E712
+            and_(
+                Friendship.sender_id == user_id,
+                Friendship.accepted == True,  # noqa: E712
+            )
         )
     )
 
@@ -55,8 +58,10 @@ async def list_friends(
         select(User)
         .join(Friendship, User.id == Friendship.sender_id)
         .where(
-            (Friendship.receiver_id == user_id)
-            & (Friendship.accepted == True)  # noqa: E712
+            and_(
+                Friendship.receiver_id == user_id,
+                Friendship.accepted == True,  # noqa: E712
+            )
         )
     )
 
@@ -73,9 +78,11 @@ async def _get_friendship_request_with_user(
 ) -> Friendship | None:
     """Returns matching friendship request with target."""
     query = select(Friendship).where(
-        (Friendship.sender_id == target_id)
-        & (Friendship.receiver_id == user_id)
-        & (Friendship.accepted == None)  # noqa: E711
+        and_(
+            Friendship.sender_id == target_id,
+            Friendship.receiver_id == user_id,
+            Friendship.accepted == None,  # noqa: E711
+        )
     )
     return await session.scalar(query)
 
@@ -85,13 +92,15 @@ async def _get_friendship_with_user(
 ) -> Friendship | None:
     """Returns matching friendship with target."""
     query = select(Friendship).where(
-        (
-            (Friendship.sender_id == user_id)
-            & (Friendship.receiver_id == target_id)
-        )
-        | (
-            (Friendship.sender_id == target_id)
-            & (Friendship.receiver_id == user_id)
+        or_(
+            and_(
+                Friendship.sender_id == user_id,
+                Friendship.receiver_id == target_id,
+            ),
+            and_(
+                Friendship.sender_id == target_id,
+                Friendship.receiver_id == user_id,
+            ),
         )
     )
 

@@ -6,10 +6,11 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from src.chatapp_api.base.models import CustomBase
+
 # Models
 from src.chatapp_api.chat.models import Chat, Membership, Message  # noqa: F401
 from src.chatapp_api.config import settings
-from src.chatapp_api.db import Base
 from src.chatapp_api.friendship.models import Friendship  # noqa: F401
 from src.chatapp_api.user.models import Block, User  # noqa: F401
 
@@ -27,7 +28,7 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-target_metadata = Base.metadata
+target_metadata = CustomBase.metadata
 
 
 # other values from the config, defined by the needs of env.py,

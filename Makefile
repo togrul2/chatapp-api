@@ -1,4 +1,5 @@
 export READ_ENV_FROM_FILE=1
+export SQLALCHEMY_WARN_20=1
 
 help:
 	@echo "-----------------HELP-----------------"
@@ -6,6 +7,7 @@ help:
 	@echo "make install: installs the project dependencies (no dev)."
 	@echo "make install-dev: installs the project dependencies (with dev)."
 	@echo "make run: runs the project".
+	@echo "make dev: runs the project in development mode".
 	@echo "make lint: uses linting tools to check the code."
 	@echo "make format: formats the code to pass required standards."
 	@echo "make type: tests types with mypy."

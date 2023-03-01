@@ -16,8 +16,8 @@ from src.chatapp_api.chat.schemas import (
     ChatReadWithLastMessage,
     ChatReadWithUsersCount,
     ChatUpdate,
-    MemberRead,
     MembershipBase,
+    MembershipRead,
     MembershipUpdate,
     MessageRead,
 )
@@ -211,7 +211,7 @@ async def enroll_into_chat(
 
 @router.patch(
     "/chats/{chat_id}/members/{target_id}",
-    response_model=MemberRead,
+    response_model=MembershipRead,
     responses={
         status.HTTP_403_FORBIDDEN: {
             "model": DetailMessage,
@@ -283,7 +283,7 @@ async def list_chat_messages(
 
 @router.get(
     "/chats/{chat_id}/members",
-    response_model=PaginatedResponse[MemberRead],
+    response_model=PaginatedResponse[MembershipRead],
     responses={
         status.HTTP_403_FORBIDDEN: {
             "model": DetailMessage,

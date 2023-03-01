@@ -4,7 +4,7 @@ from typing import cast
 import pytest
 from fastapi import status
 from httpx import AsyncClient
-from sqlalchemy import delete, select
+from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.chatapp_api.friendship.models import Friendship
@@ -75,10 +75,12 @@ class TestFriendshipRequestDetail:
         )
         body = response.json()
 
-        created_friendship_query = await session.execute(
+        created_friendship: Friendship | None = await session.scalar(
             select(Friendship).where(
-                (Friendship.sender_id == user.id)
-                & (Friendship.receiver_id == sender_user.id)
+                and_(
+                    Friendship.sender_id == user.id,
+                    Friendship.receiver_id == sender_user.id,
+                )
             )
         )
 
@@ -86,15 +88,15 @@ class TestFriendshipRequestDetail:
         assert body["sender_id"] == user.id
         assert body["receiver_id"] == sender_user.id
 
-        assert (
-            created_friendship_query.fetchone() is not None
-        ), "Friendship is not created."
+        assert created_friendship is not None, "Friendship is not created."
 
         # teardown, delete created friendship
         await session.execute(
             delete(Friendship).where(
-                (Friendship.sender_id == user.id)
-                & (Friendship.receiver_id == sender_user.id)
+                and_(
+                    Friendship.sender_id == user.id,
+                    Friendship.receiver_id == sender_user.id,
+                )
             )
         )
         await session.commit()
@@ -113,14 +115,12 @@ class TestFriendshipRequestDetail:
         response = await auth_client.delete(
             self.get_url(cast(int, sender_user.id))
         )
-        friendship_query = await session.execute(
+        friendship: Friendship | None = await session.scalar(
             select(Friendship).where(Friendship.id == target_id)
         )
 
         assert response.status_code == status.HTTP_204_NO_CONTENT
-        assert (
-            friendship_query.fetchone() is None
-        ), "Friendship is not deleted after rejection"
+        assert friendship is None, "Friendship is not deleted after rejection"
 
     async def test_accept_friendship_request(
         self,
@@ -133,16 +133,18 @@ class TestFriendshipRequestDetail:
         response = await auth_client.patch(
             self.get_url(cast(int, sender_user.id))
         )
-        friendship_query = await session.execute(
+        friendship = await session.scalar(
             select(Friendship).where(
-                (Friendship.id == friendship_request.id)
-                & (Friendship.accepted == True)  # noqa: E712
+                and_(
+                    Friendship.id == friendship_request.id,
+                    Friendship.accepted == True,  # noqa: E712
+                )
             )
         )
 
         assert response.status_code == status.HTTP_200_OK
         assert (
-            friendship_query.fetchone() is not None
+            friendship is not None
         ), "Target friendship is deleted or does not exist"
 
 

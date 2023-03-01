@@ -3,10 +3,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, UniqueConstraint
-from sqlalchemy.orm import relationship
+from sqlalchemy import UniqueConstraint
+from sqlalchemy.orm import Mapped, relationship
 
 from src.chatapp_api.base.models import CreateTimestampMixin
+from src.chatapp_api.user.models import user_fk
 
 if TYPE_CHECKING:
     from src.chatapp_api.user.models import User
@@ -23,8 +24,8 @@ class Friendship(CreateTimestampMixin):
     )
     __repr_fields__ = ("id", "sender_id", "receiver_id")
 
-    sender_id = Column(Integer, ForeignKey("user.id"))
-    receiver_id = Column(Integer, ForeignKey("user.id"))
-    accepted = Column(Boolean)
+    sender_id: Mapped[user_fk]
+    receiver_id: Mapped[user_fk]
+    accepted: Mapped[bool | None]
 
-    sender: User = relationship("User", foreign_keys="Friendship.sender_id")
+    sender: Mapped[User] = relationship(foreign_keys="Friendship.sender_id")

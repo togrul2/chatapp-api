@@ -13,7 +13,7 @@ from src.chatapp_api.config import (
 )
 
 password_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/token")  # nosec: B106
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/token")
 
 
 class AuthTokenTypes(str, Enum):

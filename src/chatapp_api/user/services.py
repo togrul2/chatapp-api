@@ -6,7 +6,7 @@ performing business logic related to user and authentication.
 import os
 
 from fastapi import UploadFile
-from sqlalchemy import delete, exists, select
+from sqlalchemy import and_, delete, exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.chatapp_api.auth.exceptions import BadTokenException
@@ -43,7 +43,7 @@ async def _validate_username_uniqueness(
 ):
     matching_user: bool = await session.scalar(
         exists()
-        .where((User.username == username) & (User.id != user_id))
+        .where(and_(User.username == username, User.id != user_id))
         .select()
     )
 
@@ -55,7 +55,7 @@ async def _validate_email_uniqueness(
     session: AsyncSession, email: str, user_id: int | None = None
 ):
     matching_user: bool = await session.scalar(
-        exists().where((User.email == email) & (User.id != user_id)).select()
+        exists().where(and_(User.email == email, User.id != user_id)).select()
     )
 
     if matching_user:
@@ -126,7 +126,7 @@ async def list_users(
     if keyword:
         expression = keyword + "%"
         query = query.where(
-            User.username.like(expression) | User.email.like(expression)
+            or_(User.username.like(expression), User.email.like(expression))
         )
 
     if paginator:

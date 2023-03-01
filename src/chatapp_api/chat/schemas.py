@@ -38,12 +38,13 @@ class MembershipUpdate(BaseOrmModel):
     is_admin: bool
 
 
-class MemberRead(UserRead):
+class MembershipRead(BaseOrmModel):
     """Schema for validating user data for chat members list."""
 
     chat_id: int
-    is_admin: bool
+    user: UserRead
     is_owner: bool
+    is_admin: bool
 
 
 class BaseChat(BaseOrmModel):
@@ -52,7 +53,7 @@ class BaseChat(BaseOrmModel):
     name: str | None
 
 
-class UserDict(BaseModel):
+class MembershipCreate(BaseModel):
     """Schema for validating user field in chat operations."""
 
     id: int
@@ -70,7 +71,7 @@ class ChatCreate(BaseChat):
     """Schema for handling chat model write"""
 
     name: ChatNameStr
-    users: list[UserDict]
+    users: list[MembershipCreate]
 
 
 class ChatRead(BaseChat):

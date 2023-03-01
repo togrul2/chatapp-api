@@ -10,9 +10,9 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import AsyncClient, Headers
-from sqlalchemy import delete
+from sqlalchemy import Engine, delete
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from src.chatapp_api.auth.jwt import create_access_token, password_context
 from src.chatapp_api.config import BASE_DIR, settings
@@ -56,11 +56,10 @@ dbms_session: DBSQLAsyncManager = PostgreSQLAsyncManager(
 
 test_engine = create_async_engine(url=test_db_url)
 async_session = sessionmaker(
-    test_engine,
-    autocommit=False,
-    expire_on_commit=False,
-    class_=AsyncSession,
+    cast(Engine, test_engine),
+    class_=cast(Session, AsyncSession),
     autoflush=False,
+    expire_on_commit=False,
 )
 
 
