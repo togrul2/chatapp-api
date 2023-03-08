@@ -16,7 +16,8 @@
             "name": "Pytest failed tests only",
             "type": "python",
             "request": "launch",
-            "module": "pytest --lf",
+            "module": "pytest",
+            "args": ["--lf"],
             "justMyCode": true
         }
     ]

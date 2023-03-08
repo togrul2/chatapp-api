@@ -10,7 +10,7 @@
     "python.linting.flake8Args": [
         "--ignore=S101"
     ],
-    "python.analysis.typeCheckingMode": "off",
+    "python.analysis.typeCheckingMode": "basic",
     "python.testing.pytestArgs": [
         "tests"
     ],

@@ -2,12 +2,12 @@
 from fastapi import HTTPException, status
 
 UsernameAlreadyTaken = HTTPException(
-    status_code=status.HTTP_400_BAD_REQUEST,
+    status_code=status.HTTP_409_CONFLICT,
     detail="User with given username already exists.",
 )
 
 EmailAlreadyTaken = HTTPException(
-    status_code=status.HTTP_400_BAD_REQUEST,
+    status_code=status.HTTP_409_CONFLICT,
     detail="User with given email already exists.",
 )
 

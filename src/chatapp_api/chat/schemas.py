@@ -36,6 +36,7 @@ class MembershipUpdate(BaseOrmModel):
     """Schema for validation membership update payload from request."""
 
     is_admin: bool
+    is_owner: bool | None
 
 
 class MembershipRead(BaseOrmModel):
@@ -71,7 +72,7 @@ class ChatCreate(BaseChat):
     """Schema for handling chat model write"""
 
     name: ChatNameStr
-    users: list[MembershipCreate]
+    members: list[MembershipCreate]
 
 
 class ChatRead(BaseChat):

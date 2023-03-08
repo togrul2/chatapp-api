@@ -39,27 +39,6 @@ async def get_pending_requests(
     )
 
 
-@router.get(
-    "/requests/users/{target_id}",
-    response_model=FriendshipRead,
-    responses={
-        status.HTTP_404_NOT_FOUND: {
-            "model": DetailMessage,
-            "description": "Friendship request from given user is not found.",
-        }
-    },
-)
-async def get_request(
-    target_id: int,
-    session: AsyncSession = Depends(get_db_session),
-    user_id: int = Depends(get_current_user_id_from_bearer),
-):
-    """Returns friendship with given user."""
-    return await friendship_services.get_friendship_with_user_or_404(
-        session, user_id, target_id
-    )
-
-
 @router.post(
     "/requests/users/{target_id}",
     response_model=FriendshipRead,
@@ -83,8 +62,8 @@ async def send_request(
     return await friendship_services.send_to(session, user_id, target_id)
 
 
-@router.patch(
-    "/requests/users/{target_id}",
+@router.post(
+    "/requests/users/{target_id}/accept",
     response_model=FriendshipRead,
     responses={
         status.HTTP_404_NOT_FOUND: {
@@ -105,8 +84,8 @@ async def accept_request(
     return await friendship_services.approve(session, user_id, target_id)
 
 
-@router.delete(
-    "/requests/users/{target_id}",
+@router.post(
+    "/requests/users/{target_id}/decline",
     responses={
         status.HTTP_404_NOT_FOUND: {
             "model": DetailMessage,
@@ -127,8 +106,28 @@ async def delete_friendship(
 @router.get("/friends", response_model=PaginatedResponse[UserRead])
 async def list_friends(
     user_id: int = Depends(get_current_user_id_from_bearer),
-    session: AsyncSession = Depends(get_db_session),
     paginator: BasePaginator = Depends(get_paginator),
 ):
     """Returns list of friends."""
-    return await friendship_services.list_friends(session, user_id, paginator)
+    return await friendship_services.list_friends(user_id, paginator)
+
+
+@router.get(
+    "/friends/{target_id}",
+    response_model=FriendshipRead,
+    responses={
+        status.HTTP_404_NOT_FOUND: {
+            "model": DetailMessage,
+            "description": "Friendship request from given user is not found.",
+        }
+    },
+)
+async def get_frienship(
+    target_id: int,
+    session: AsyncSession = Depends(get_db_session),
+    user_id: int = Depends(get_current_user_id_from_bearer),
+):
+    """Returns friendship with given user."""
+    return await friendship_services.get_friendship_with_user_or_404(
+        session, user_id, target_id
+    )

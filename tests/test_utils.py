@@ -66,4 +66,4 @@ def test_split_filename(filename, expected):
 )
 def test_parse_url(url, expected):
     """Tests parse url function from utils module."""
-    assert utils.parse_url(url) == expected
+    assert utils.parse_rdb_url(url) == expected

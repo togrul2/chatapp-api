@@ -22,18 +22,26 @@ def split_filename(file: str) -> tuple[str, str]:
     return filename, ext
 
 
-class ParsedDBUrl(TypedDict):
-    """Typed dict with keys of parsed url."""
+class ParsedRDBUrl(TypedDict):
+    """Typed dict with keys of parsed url of relational database."""
 
     hostname: str
     port: int
-    user: str | None
-    password: str | None
+    user: str
+    password: str
     dbname: str
 
 
-def parse_url(url: str) -> ParsedDBUrl:
-    """Parses url and returns parameters from it."""
+class ParsedMessageBrokerUrl(TypedDict):
+    """Typed dict with keys of parsed url of message broker."""
+
+    hostname: str
+    port: int
+    db: int
+
+
+def parse_rdb_url(url: str) -> ParsedRDBUrl:
+    """Parses relational database url and returns parameters from it."""
     params = parse.urlparse(url)
 
     hostname = params.hostname
@@ -48,6 +56,12 @@ def parse_url(url: str) -> ParsedDBUrl:
     if not port:
         raise ValueError("Invalid port, make sure passed url is correct.")
 
+    if not user:
+        raise ValueError("Invalid user, make sure passed url is correct.")
+
+    if not password:
+        raise ValueError("Invalid password, make sure passed url is correct.")
+
     return {
         "hostname": hostname,
         "port": port,
@@ -55,3 +69,23 @@ def parse_url(url: str) -> ParsedDBUrl:
         "password": password,
         "dbname": dbname,
     }
+
+
+def parse_message_broker_url(url: str) -> ParsedMessageBrokerUrl:
+    """Parses message broker url and returns parameters from it."""
+    params = parse.urlparse(url)
+
+    hostname = params.hostname
+    port = params.port
+    db = params.path[1:]
+
+    if not hostname:
+        raise ValueError("Invalid hostname, make sure passed url is correct.")
+
+    if not port:
+        raise ValueError("Invalid port, make sure passed url is correct.")
+
+    if not db.isnumeric():
+        raise ValueError("Invalid db number, must be numeric")
+
+    return {"hostname": hostname, "port": port, "db": int(db)}

@@ -30,7 +30,6 @@ router = APIRouter(prefix="/api", tags=["user"])
 @router.get("/users", response_model=PaginatedResponse[UserRead])
 async def list_users(
     keyword: str | None = None,
-    session: AsyncSession = Depends(get_db_session),
     paginator: BasePaginator = Depends(get_paginator),
 ):
     """
@@ -39,7 +38,7 @@ async def list_users(
     - **keyword**: keyword url parameter which will be
         used to find users with matching username or email.
     """
-    return await user_services.list_users(session, paginator, keyword)
+    return await user_services.list_users(paginator, keyword)
 
 
 @router.post(

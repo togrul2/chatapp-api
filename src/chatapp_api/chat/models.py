@@ -6,7 +6,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING, Annotated
 
-from sqlalchemy import ForeignKey, String, Text, and_, func, select
+from sqlalchemy import ForeignKey, Text, and_, func, select
 from sqlalchemy.orm import Mapped, column_property, mapped_column, relationship
 
 from src.chatapp_api.base.models import CreateTimestampMixin, CustomBase
@@ -54,13 +54,9 @@ class Chat(CreateTimestampMixin, CustomBase):
 
     # Redefined `id` field for using in column_property
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str | None] = mapped_column(String(150))
+    # id: Mapped[int_pk]
+    name: Mapped[Annotated[str, 150] | None]
     private: Mapped[bool]
-
-    users: Mapped[list[User]] = relationship(
-        secondary="membership", back_populates="chats"
-    )
-    messages: Mapped[list[Message]] = relationship(backref="chat")
 
     users_count: Mapped[int] = column_property(
         select(func.count(Membership.user_id))
@@ -77,6 +73,7 @@ class Chat(CreateTimestampMixin, CustomBase):
     last_message_id: Mapped[int] = column_property(
         select(Message.id)
         .where(Message.created_at == _latest_message_date_query)
+        .correlate_except(Message)
         .scalar_subquery(),
         deferred=True,
     )
@@ -84,10 +81,11 @@ class Chat(CreateTimestampMixin, CustomBase):
         select(func.max(Message.created_at))
         .where(Message.chat_id == id)
         .correlate_except(Message)
-        .scalar_subquery()
+        .scalar_subquery(),
+        deferred=True,
     )
+    # TODO: problem with `id: Mapped[int_pk]`
     last_message: Mapped[Message] = relationship(
         primaryjoin=and_(Message.id == last_message_id, Message.chat_id == id),
-        uselist=False,
         viewonly=True,
     )

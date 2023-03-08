@@ -2,7 +2,6 @@
 Authentication module with all stuff related to authentication via jwt.
 """
 from datetime import datetime
-from typing import cast
 
 from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,13 +26,15 @@ def get_user_id_from_token(token_type: AuthTokenTypes, token: str) -> int:
     )
 
     user_id = payload.get("user_id")
+    curr_date = payload.get("expire")
 
-    if (
-        not (curr_date := payload.get("expire"))
-        or datetime.fromisoformat(curr_date) <= datetime.utcnow()
-        or payload.get("type") != token_type
-        or not user_id
-    ):
+    if curr_date is None:
+        raise JWTError
+
+    is_expired = datetime.fromisoformat(curr_date) <= datetime.utcnow()
+    is_correct_type = payload.get("type") != token_type
+
+    if is_expired or is_correct_type or not user_id:
         raise JWTError
 
     return user_id
@@ -46,15 +47,15 @@ async def authenticate_user(
     Returns user if credentials are correct, otherwise raises 401"""
     user = await get_by_username(session, username)
 
-    if (
-        user is None
-        or password_context.verify(password, user.password) is False
-    ):
+    if user is None:
         raise BadCredentialsException
 
-    return UserWithTokens(
-        user=user, **generate_auth_tokens(cast(int, user.id))
-    )
+    is_password_matching = password_context.verify(password, user.password)
+
+    if is_password_matching is False:
+        raise BadCredentialsException
+
+    return UserWithTokens(user=user, **generate_auth_tokens(user.id))
 
 
 async def refresh_tokens(
@@ -64,8 +65,6 @@ async def refresh_tokens(
     try:
         user_id = get_user_id_from_token(AuthTokenTypes.REFRESH, refresh_token)
         user = await get_or_401(session, user_id)
-        return UserWithTokens(
-            user=user, **generate_auth_tokens(cast(int, user.id))
-        )
+        return UserWithTokens(user=user, **generate_auth_tokens(user.id))
     except JWTError:
         raise BadTokenException

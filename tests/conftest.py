@@ -7,14 +7,14 @@ import shutil
 from typing import cast
 
 import pytest
-import pytest_asyncio
 from fastapi import FastAPI
 from httpx import AsyncClient, Headers
-from sqlalchemy import Engine, delete
+from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from src.chatapp_api.auth.jwt import create_access_token, password_context
+from src.chatapp_api.chat.models import Chat
 from src.chatapp_api.config import BASE_DIR, settings
 from src.chatapp_api.dependencies import (
     get_db_session,
@@ -24,7 +24,7 @@ from src.chatapp_api.friendship.models import Friendship
 from src.chatapp_api.main import app as fastapi_app
 from src.chatapp_api.staticfiles import LocalStaticFilesManager
 from src.chatapp_api.user.models import User
-from src.chatapp_api.utils import parse_url
+from src.chatapp_api.utils import parse_rdb_url
 from tests.db_managers import (
     DBSQLAsyncManager,
     PostgreSQLAsyncManager,
@@ -32,7 +32,7 @@ from tests.db_managers import (
     drop_tables,
 )
 
-params = parse_url(settings.database_url)
+params = parse_rdb_url(settings.database_url)
 db_hostname = params["hostname"]
 db_port = params["port"]
 db_user = params["user"]
@@ -46,20 +46,19 @@ test_db_url = (
 )
 
 dbms_session: DBSQLAsyncManager = PostgreSQLAsyncManager(
-    cast(str, db_user),
-    cast(str, db_password),
-    cast(str, db_hostname),
-    cast(int, db_port),
-    test_db_name,
+    db_user, db_password, db_hostname, db_port, test_db_name
 )
 
 
 test_engine = create_async_engine(url=test_db_url)
-async_session = sessionmaker(
-    cast(Engine, test_engine),
-    class_=cast(Session, AsyncSession),
-    autoflush=False,
-    expire_on_commit=False,
+async_session = cast(
+    AsyncSession,
+    sessionmaker(
+        cast(Engine, test_engine),
+        class_=cast(Session, AsyncSession),
+        autoflush=False,
+        expire_on_commit=False,
+    ),
 )
 
 
@@ -74,7 +73,7 @@ def event_loop():
     loop.close()
 
 
-@pytest_asyncio.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session", autouse=True)
 async def setup_teardown():
     """Sets up database and local static files manager.
     Tears down after pytest session is over."""
@@ -87,14 +86,14 @@ async def setup_teardown():
     shutil.rmtree(TEST_STATIC_ROOT)
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest.fixture(scope="session")
 async def session():
     """Fixture providing Async db session."""
     async with async_session() as db_session:
         yield db_session
 
 
-@pytest_asyncio.fixture(scope="session")
+@pytest.fixture(scope="session")
 async def test_app(session: AsyncSession):
     """Test FastAPI app for processing requests.
     Uses testing database and staticfiles manager."""
@@ -123,15 +122,15 @@ def client(test_app: FastAPI):
     yield AsyncClient(app=test_app, base_url="http://test")
 
 
-@pytest_asyncio.fixture()
+@pytest.fixture()
 async def auth_client(user: User, client: AsyncClient):
     """Client of authorized user for testings endpoints."""
-    access_token = create_access_token(cast(int, user.id))
+    access_token = create_access_token(user.id)
     client.headers = Headers({"Authorization": f"Bearer {access_token}"})
     yield client
 
 
-@pytest_asyncio.fixture()
+@pytest.fixture()
 async def user(session: AsyncSession):
     """Fixture for generating user"""
     password = password_context.hash("Testpassword")
@@ -144,13 +143,12 @@ async def user(session: AsyncSession):
     )
     session.add(user_model)
     await session.commit()
-    target_id = user_model.id
     yield user_model
-    await session.execute(delete(User).where(User.id == target_id))
+    await session.delete(user_model)
     await session.commit()
 
 
-@pytest_asyncio.fixture()
+@pytest.fixture()
 async def sender_user(session: AsyncSession):
     """User for sending friendship request to another one."""
     password = password_context.hash("Testpassword")
@@ -163,30 +161,28 @@ async def sender_user(session: AsyncSession):
     )
     session.add(user_model)
     await session.commit()
-    target_id = user_model.id
     yield user_model
-    await session.execute(delete(User).where(User.id == target_id))
+    await session.delete(user_model)
     await session.commit()
 
 
-@pytest_asyncio.fixture()
+@pytest.fixture()
 async def friendship_request(
     user: User, sender_user: User, session: AsyncSession
 ):
     """Friendship request model fixture."""
 
     friendship_model = Friendship(
-        receiver_id=user.id, sender_id=sender_user.id
+        receiver_id=user.id, sender_id=sender_user.id, accepted=False
     )
     session.add(friendship_model)
     await session.commit()
-    target_id = friendship_model.id
     yield friendship_model
-    await session.execute(delete(Friendship).where(Friendship.id == target_id))
+    await session.delete(friendship_model)
     await session.commit()
 
 
-@pytest_asyncio.fixture()
+@pytest.fixture()
 async def friendship(user: User, sender_user: User, session: AsyncSession):
     """Friendship fixture between user and sender_user."""
     friendship_model = Friendship(
@@ -194,7 +190,17 @@ async def friendship(user: User, sender_user: User, session: AsyncSession):
     )
     session.add(friendship_model)
     await session.commit()
-    target_id = friendship_model.id
     yield friendship_model
-    await session.execute(delete(Friendship).where(Friendship.id == target_id))
+    await session.delete(friendship_model)
+    await session.commit()
+
+
+@pytest.fixture()
+async def public_chat(session: AsyncSession):
+    """Fixture creates public chat"""
+    chat = Chat(name="Test-Cars", private=False)
+    session.add(chat)
+    await session.commit()
+    yield chat
+    await session.delete(chat)
     await session.commit()

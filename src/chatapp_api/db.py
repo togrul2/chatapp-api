@@ -26,7 +26,7 @@ async_session = sessionmaker(
 
 async def ping_sql_database():
     """Pings SQL DB in order to make sure it is running"""
-    params = utils.parse_url(settings.database_url)
+    params = utils.parse_rdb_url(settings.database_url)
     try:
         connection = await connect(
             database=params["dbname"],
@@ -46,14 +46,11 @@ async def ping_sql_database():
 
 async def ping_redis_database():
     """Pings redis server in order to make sure that it is up and running."""
-    params = utils.parse_url(settings.messaging_url)
+    params = utils.parse_message_broker_url(settings.messaging_url)
 
     try:
         server = Redis(
-            host=params["hostname"],
-            port=params["port"],
-            username=params["user"],
-            password=params["password"],
+            host=params["hostname"], port=params["port"], db=params["db"]
         )
         await server.ping()
         await server.close()

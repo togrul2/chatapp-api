@@ -34,7 +34,7 @@ async def private_messaging(
 ):
     """Websocket for sending and receiving private messages."""
     await manager.accept()
-    await manager.run_manager()
+    await manager.run()
 
 
 @router.get(
@@ -65,22 +65,21 @@ async def public_chat_messaging(
 ):
     """Websocket route for sending and receiving public chat messages."""
     await manager.accept()
-    await manager.run_manager()
+    await manager.run()
 
 
 @router.get("/chats", response_model=PaginatedResponse[ChatReadWithUsersCount])
 async def list_public_chats(
     keyword: str | None = None,
-    session: AsyncSession = Depends(get_db_session),
     paginator: BasePaginator = Depends(get_paginator),
 ):
     """List public chats as well as search through them."""
-    return await chat_services.list_chats(session, paginator, keyword)
+    return await chat_services.list_chats(paginator, keyword)
 
 
 @router.post(
     "/chats",
-    response_model=ChatReadWithUsersCount,
+    response_model=ChatRead,
     status_code=status.HTTP_201_CREATED,
     responses={
         status.HTTP_404_NOT_FOUND: {
@@ -99,7 +98,9 @@ async def create_public_chat(
     session: AsyncSession = Depends(get_db_session),
 ):
     """Create public chat. Makes creator of chat owner."""
-    return await chat_services.create_public_chat(session, user_id, chat)
+    return await chat_services.create_public_chat(
+        session, user_id, chat.name, chat.members
+    )
 
 
 @router.get(
@@ -117,7 +118,7 @@ async def get_public_chat(
 ):
     """Get public chat detail with given id.
     If no public chat is found returns 404."""
-    return await chat_services.get_public_chat_with_members_or_404(
+    return await chat_services.get_public_chat_with_members_count_or_404(
         session, chat_id
     )
 
@@ -139,7 +140,9 @@ async def update_public_chat(
     session: AsyncSession = Depends(get_db_session),
 ):
     """Update public chat info. If user is not admin, returns 403."""
-    return await chat_services.update_chat(session, user_id, chat_id, data)
+    return await chat_services.update_chat(
+        session, user_id, chat_id, data.name
+    )
 
 
 @router.delete(
@@ -223,7 +226,7 @@ async def enroll_into_chat(
         },
     },
 )
-async def update_user_membership(
+async def update_chat_member(
     chat_id: int,
     target_id: int,
     payload: MembershipUpdate,
@@ -233,7 +236,7 @@ async def update_user_membership(
     """Updates user membership info in chat (is_admin).
     If non admin user, returns 403 error code."""
     return await chat_services.update_membership(
-        session, chat_id, user_id, target_id, payload.dict()
+        session, chat_id, user_id, target_id, payload.is_admin
     )
 
 
@@ -248,7 +251,7 @@ async def update_user_membership(
         }
     },
 )
-async def remove_user_from_chat(
+async def remove_chat_member(
     chat_id: int,
     target_id: int,
     session: AsyncSession = Depends(get_db_session),
@@ -311,13 +314,10 @@ async def list_chat_members(
 async def list_user_chats(
     keyword: str | None = None,
     user_id: int = Depends(get_current_user_id_from_bearer),
-    session: AsyncSession = Depends(get_db_session),
     paginator: BasePaginator = Depends(get_paginator),
 ):
     """Returns auth user's chats sorted by the date of their last message."""
-    return await chat_services.list_user_chats(
-        session, user_id, paginator, keyword
-    )
+    return await chat_services.list_user_chats(user_id, paginator, keyword)
 
 
 @router.websocket("/chats/notifications", name="Notifications receiver")
@@ -326,4 +326,4 @@ async def get_notifications(
 ):
     """Websocket route for getting notifications for new messages."""
     await manager.accept()
-    await manager.run_manager()
+    await manager.run()

@@ -6,15 +6,14 @@ performing business logic related to user and authentication.
 import os
 
 from fastapi import UploadFile
-from sqlalchemy import and_, delete, exists, or_, select
+from sqlalchemy import and_, exists, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.chatapp_api.auth.exceptions import BadTokenException
 from src.chatapp_api.auth.jwt import password_context
 from src.chatapp_api.base import services as base_services
 from src.chatapp_api.base.exceptions import NotFoundException
-from src.chatapp_api.base.schemas import PaginatedResponse
-from src.chatapp_api.paginator import BasePaginator
+from src.chatapp_api.paginator import BasePaginator, PaginatedResponseDict
 from src.chatapp_api.user.exceptions import (
     EmailAlreadyTaken,
     UsernameAlreadyTaken,
@@ -24,7 +23,6 @@ from src.chatapp_api.user.schemas import (
     UserBase,
     UserCreate,
     UserPartialUpdate,
-    UserRead,
 )
 
 
@@ -41,11 +39,13 @@ def get_profile_picture_uri(user_id: int, image: UploadFile):
 async def _validate_username_uniqueness(
     session: AsyncSession, username: str, user_id: int | None = None
 ):
-    matching_user: bool = await session.scalar(
-        exists()
-        .where(and_(User.username == username, User.id != user_id))
-        .select()
-    )
+    matching_user: bool = (
+        await session.scalar(
+            exists()
+            .where(and_(User.username == username, User.id != user_id))
+            .select()
+        )
+    ) or False
 
     if matching_user:
         raise UsernameAlreadyTaken
@@ -54,17 +54,16 @@ async def _validate_username_uniqueness(
 async def _validate_email_uniqueness(
     session: AsyncSession, email: str, user_id: int | None = None
 ):
-    matching_user: bool = await session.scalar(
-        exists().where(and_(User.email == email, User.id != user_id)).select()
-    )
+    matching_user: bool = (
+        await session.scalar(
+            exists()
+            .where(and_(User.email == email, User.id != user_id))
+            .select()
+        )
+    ) or False
 
     if matching_user:
         raise EmailAlreadyTaken
-
-
-async def get_by_id(session: AsyncSession, user_id: int) -> User | None:
-    """Returns user with given id or None if no user was found."""
-    return await session.get(User, user_id)
 
 
 async def get_by_username(session: AsyncSession, username: str) -> User | None:
@@ -76,9 +75,7 @@ async def get_by_username(session: AsyncSession, username: str) -> User | None:
 async def get_or_401(session: AsyncSession, user_id: int) -> User:
     """Returns user with given id.
     If not found, raises 401 unauthenticated error."""
-    user = await get_by_id(session, user_id)
-
-    if user is None:
+    if (user := await session.get(User, user_id)) is None:
         raise BadTokenException
 
     return user
@@ -87,9 +84,7 @@ async def get_or_401(session: AsyncSession, user_id: int) -> User:
 async def get_or_404(session: AsyncSession, user_id: int) -> User:
     """Returns user with given id.
     If user with given id does not exist, raises 404 Not Found"""
-    user = await get_by_id(session, user_id)
-
-    if user is None:
+    if (user := await session.get(User, user_id)) is None:
         raise NotFoundException("User with given id has not been found.")
 
     return user
@@ -98,9 +93,7 @@ async def get_or_404(session: AsyncSession, user_id: int) -> User:
 async def get_by_username_or_404(session: AsyncSession, username: str) -> User:
     """Returns user by his username.
     If user is not found, raises 404 not found error"""
-    user = await get_by_username(session, username)
-
-    if user is None:
+    if (user := await get_by_username(session, username)) is None:
         raise NotFoundException("User with given username has not been found.")
 
     return user
@@ -115,24 +108,20 @@ async def create_user(session: AsyncSession, schema: UserCreate) -> User:
 
 
 async def list_users(
-    session: AsyncSession,
-    paginator: BasePaginator | None = None,
+    paginator: BasePaginator,
     keyword: str | None = None,
-) -> PaginatedResponse[UserRead] | list[User]:
+) -> PaginatedResponseDict:
     """Returns list of items matching the given keyword.
     For now, it is simple exact match."""
     query = select(User)
 
     if keyword:
-        expression = keyword + "%"
+        expression = "%" + keyword + "%"
         query = query.where(
             or_(User.username.like(expression), User.email.like(expression))
         )
 
-    if paginator:
-        return await paginator.get_paginated_response_for_model(query)
-
-    return (await session.scalars(query)).all()
+    return await paginator.get_paginated_response_for_model(query)
 
 
 async def update_profile_picture(
@@ -142,7 +131,7 @@ async def update_profile_picture(
     Sets image as a profile picture of a user
     and returns updated user info.
     """
-    user: User = await get_or_404(session, user_id)
+    user = await get_or_404(session, user_id)
     return await base_services.update(
         session, user, {"profile_picture": image_url}
     )
@@ -185,5 +174,5 @@ async def delete_user(session: AsyncSession, user_id: int) -> None:
     """Deletes user with given id.
     If user is not found, raises 401 not authenticated."""
     user = await get_or_404(session, user_id)
-    await session.execute(delete(User).where(User.id == user.id))
+    await session.delete(user)
     await session.commit()

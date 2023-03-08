@@ -1,22 +1,18 @@
 """Module with user related models."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Annotated
+from typing import Annotated
 
-from sqlalchemy import ForeignKey, String, UniqueConstraint
+from sqlalchemy import ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.chatapp_api.base.models import CustomBase
 
-str50 = Annotated[str, mapped_column(String(50))]
-str255 = Annotated[str, mapped_column(String(255))]
+str50 = Annotated[str, 50]
+str255 = Annotated[str, 255]
 user_fk = Annotated[
     int, mapped_column(ForeignKey("user.id", ondelete="cascade"))
 ]
-
-
-if TYPE_CHECKING:
-    from src.chatapp_api.chat.models import Chat
 
 
 class User(CustomBase):
@@ -25,16 +21,13 @@ class User(CustomBase):
     __tablename__ = "user"
     __repr_fields__ = ("id", "username")
 
+    id: Mapped[int] = mapped_column(primary_key=True)
     first_name: Mapped[str50 | None]
     last_name: Mapped[str50 | None]
-    username: Mapped[str50] = mapped_column(unique=True)
-    email: Mapped[str50] = mapped_column(unique=True)
+    username: Mapped[str50] = mapped_column(unique=True, nullable=False)
+    email: Mapped[str50] = mapped_column(unique=True, nullable=False)
     password: Mapped[str255]
     profile_picture: Mapped[str255 | None]
-
-    chats: Mapped[list[Chat]] = relationship(
-        "Chat", secondary="membership", back_populates="users"
-    )
 
 
 class Block(CustomBase):

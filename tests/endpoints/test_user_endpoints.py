@@ -6,17 +6,16 @@ from urllib import parse
 
 import pytest
 from fastapi import status
-from httpx import AsyncClient
+from httpx import AsyncClient, Headers
 from PIL import Image
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.chatapp_api.user.exceptions import (
-    EmailAlreadyTaken,
-    UsernameAlreadyTaken,
-)
+from src.chatapp_api.auth.jwt import create_access_token
 from src.chatapp_api.user.models import User
+from src.chatapp_api.user.schemas import UserRead
 from tests.conftest import TEST_STATIC_ROOT
+from tests.utils import AssertionErrors, validate_dict
 
 
 @pytest.mark.asyncio
@@ -39,7 +38,10 @@ class TestRegisterUser:
         response = await client.post(self.url, json=self.user_data)
         body = response.json()
 
-        assert response.status_code == status.HTTP_201_CREATED
+        assert (
+            response.status_code == status.HTTP_201_CREATED
+        ), AssertionErrors.HTTP_NOT_201_CREATED
+        assert validate_dict(UserRead, body), AssertionErrors.INVALID_BODY
         assert body["username"] == self.user_data["username"]
         assert body["email"] == self.user_data["email"]
         assert body["first_name"] == self.user_data["first_name"]
@@ -63,27 +65,19 @@ class TestRegisterUser:
         self, client: AsyncClient, user: User
     ):
         """Test registering user with existing username."""
-        response = await client.post(
-            self.url,
-            json={
-                **self.user_data,
-                "username": user.username,
-            },
-        )
+        payload = {**self.user_data, "username": user.username}
+        response = await client.post(self.url, json=payload)
 
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert response.json()["detail"] == UsernameAlreadyTaken.detail
+        assert response.status_code == status.HTTP_409_CONFLICT
 
     async def test_register_user_with_existing_email(
         self, client: AsyncClient, user: User
     ):
         """Test registering user with existing email."""
-        response = await client.post(
-            self.url, json={**self.user_data, "email": user.email}
-        )
+        payload = {**self.user_data, "email": user.email}
+        response = await client.post(self.url, json=payload)
 
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert response.json()["detail"] == EmailAlreadyTaken.detail
+        assert response.status_code == status.HTTP_409_CONFLICT
 
 
 @pytest.mark.asyncio
@@ -107,7 +101,9 @@ class TestUsersMe:
         """Tests get logged in user endpoint successful"""
         response = await auth_client.get(self.url)
 
-        assert response.status_code == status.HTTP_200_OK
+        assert (
+            response.status_code == status.HTTP_200_OK
+        ), AssertionErrors.HTTP_NOT_200_OK
 
     async def test_get_user_unauthenticated(self, client: AsyncClient):
         """Tests unauthorized user getting 401"""
@@ -170,15 +166,27 @@ class TestUsersMe:
         assert response.status_code == status.HTTP_204_NO_CONTENT
 
     async def test_delete_user(
-        self, user: User, auth_client: AsyncClient, session: AsyncSession
+        self, user: User, client: AsyncClient, session: AsyncSession
     ):
         """Tests logged-in user deletion."""
-        target_id = user.id
-        response = await auth_client.delete(self.url)
-        deleted_user = await session.get(User, target_id)
+        user = User(  # nosec # noqa: S106
+            username="marrydoe",
+            email="marrydoe@example.com",
+            password="Testpassword",
+            # hashing is not needed here, we will
+            # generate jwt token based on user's id
+        )
+        session.add(user)
+        await session.commit()
+        client.headers = Headers(
+            {"Authorization": f"Bearer {create_access_token(user.id)}"}
+        )
+        response = await client.delete(self.url)
 
-        assert response.status_code == status.HTTP_204_NO_CONTENT
-        assert deleted_user is None
+        assert (
+            response.status_code == status.HTTP_204_NO_CONTENT
+        ), AssertionErrors.HTTP_NOT_204_NO_CONTENT
+        assert await session.get(User, user.id) is None, "User is not deleted"
 
 
 @pytest.mark.asyncio

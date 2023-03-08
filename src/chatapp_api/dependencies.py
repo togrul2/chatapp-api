@@ -1,5 +1,6 @@
 """Module with FastAPI dependencies."""
 from collections.abc import AsyncIterator
+from typing import cast
 
 from broadcaster import Broadcast  # type: ignore
 from fastapi import Depends, Query, Request
@@ -22,7 +23,7 @@ from src.chatapp_api.staticfiles import (
 
 async def get_db_session() -> AsyncIterator[AsyncSession]:
     """Returns db session for FastAPI dependency injection."""
-    db_session = async_session()
+    db_session = cast(AsyncSession, async_session())
     try:
         yield db_session
     finally:

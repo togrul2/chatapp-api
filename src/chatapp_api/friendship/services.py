@@ -1,7 +1,5 @@
 """Friendship services module."""
-from collections.abc import Sequence
-
-from sqlalchemy import and_, delete, or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer, joinedload
 
@@ -18,8 +16,8 @@ from src.chatapp_api.user.models import User
 
 
 async def list_pending_friendships(
-    session: AsyncSession, user_id: int, paginator: BasePaginator | None = None
-) -> Sequence[Friendship] | PaginatedResponseDict:
+    session: AsyncSession, user_id: int, paginator: BasePaginator
+) -> PaginatedResponseDict:
     """List of users pending requests."""
     user = await user_services.get_or_404(session, user_id)
     query = (
@@ -28,20 +26,17 @@ async def list_pending_friendships(
         .where(
             and_(
                 Friendship.receiver_id == user.id,
-                Friendship.accepted == None,  # noqa: E711
+                Friendship.accepted == False,  # noqa: E712
             )
         )
     )
 
-    if paginator:
-        return await paginator.get_paginated_response_for_model(query)
-
-    return (await session.scalars(query)).all()
+    return await paginator.get_paginated_response_for_model(query)
 
 
 async def list_friends(
-    session: AsyncSession, user_id: int, paginator: BasePaginator | None = None
-) -> Sequence[User] | PaginatedResponseDict:
+    user_id: int, paginator: BasePaginator
+) -> PaginatedResponseDict:
     """List of all friends user has."""
     sent_query = (
         select(User)
@@ -67,21 +62,18 @@ async def list_friends(
 
     query = sent_query.union(received_query)
 
-    if paginator:
-        return await paginator.get_paginated_response_for_rows(query)
-
-    return (await session.scalars(query)).all()
+    return await paginator.get_paginated_response_for_rows(query)
 
 
-async def _get_friendship_request_with_user(
+async def _get_friendship_request_from_user(
     session: AsyncSession, user_id: int, target_id: int
 ) -> Friendship | None:
-    """Returns matching friendship request with target."""
+    """Returns friendship request sent by target user."""
     query = select(Friendship).where(
         and_(
             Friendship.sender_id == target_id,
             Friendship.receiver_id == user_id,
-            Friendship.accepted == None,  # noqa: E711
+            Friendship.accepted == False,  # noqa: E712
         )
     )
     return await session.scalar(query)
@@ -91,16 +83,20 @@ async def _get_friendship_with_user(
     session: AsyncSession, user_id: int, target_id: int
 ) -> Friendship | None:
     """Returns matching friendship with target."""
-    query = select(Friendship).where(
-        or_(
-            and_(
-                Friendship.sender_id == user_id,
-                Friendship.receiver_id == target_id,
-            ),
-            and_(
-                Friendship.sender_id == target_id,
-                Friendship.receiver_id == user_id,
-            ),
+    query = (
+        select(Friendship)
+        .where(Friendship.accepted == True)  # noqa: E712
+        .where(
+            or_(
+                and_(
+                    Friendship.sender_id == user_id,
+                    Friendship.receiver_id == target_id,
+                ),
+                and_(
+                    Friendship.sender_id == target_id,
+                    Friendship.receiver_id == user_id,
+                ),
+            )
         )
     )
 
@@ -125,7 +121,7 @@ async def get_friendship_with_user_or_404(
     return friendship
 
 
-async def get_friendship_request_with_user_or_404(
+async def _get_friendship_request_with_user_or_404(
     session: AsyncSession, user_id: int, target_id: int
 ) -> Friendship:
     """
@@ -133,7 +129,7 @@ async def get_friendship_request_with_user_or_404(
     Raises NotFound if user hasn't sent request.
     """
     if (
-        friendship := await _get_friendship_request_with_user(
+        friendship := await _get_friendship_request_from_user(
             session, user_id, target_id
         )
     ) is None:
@@ -150,10 +146,21 @@ async def send_to(
     if target_id == user_id:
         raise RequestWithYourself
 
-    if (
-        await _get_friendship_with_user(session, user_id, target_id)
-        is not None
-    ):
+    # Friendship request sent by one of two users
+    friendship_request = select(Friendship).where(
+        or_(
+            and_(
+                Friendship.sender_id == target_id,
+                Friendship.receiver_id == user_id,
+            ),
+            and_(
+                Friendship.sender_id == user_id,
+                Friendship.receiver_id == target_id,
+            ),
+        )
+    )
+
+    if await session.scalar(friendship_request) is not None:
         raise RequestAlreadySent
 
     await user_services.get_or_404(session, target_id)
@@ -167,19 +174,21 @@ async def approve(
     session: AsyncSession, user_id: int, target_id: int
 ) -> Friendship:
     """Service method for approving pending request"""
-    friendship = await get_friendship_request_with_user_or_404(
+    friendship = await _get_friendship_request_with_user_or_404(
         session, user_id, target_id
     )
-    return await base_services.update(session, friendship, {"accepted": True})
+    friendship.accepted = True
+    session.add(friendship)
+    await session.commit()
+    await session.refresh(friendship)
+    return friendship
 
 
 async def decline(session: AsyncSession, user_id: int, target_id: int) -> None:
     """Declines or terminates friendship with target user."""
-    friendship = await get_friendship_request_with_user_or_404(
+    friendship = await _get_friendship_request_with_user_or_404(
         session, user_id, target_id
     )
 
-    await session.execute(
-        delete(Friendship).where(Friendship.id == friendship.id)
-    )
+    await session.delete(friendship)
     await session.commit()

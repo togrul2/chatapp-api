@@ -17,7 +17,7 @@ from src.chatapp_api.chat.exceptions import (
     WebSocketChatDoesNotExist,
 )
 from src.chatapp_api.chat.models import Chat, Message
-from src.chatapp_api.user import services as user_services
+from src.chatapp_api.user.models import User
 from src.chatapp_api.user.schemas import UserRead
 
 
@@ -34,18 +34,18 @@ class WebsocketManager(Protocol):
     async def accept(self) -> None:
         ...
 
-    async def run_manager(self) -> None:
+    async def run(self) -> None:
         ...
 
 
-class Sender(WebsocketManager):
+class Sender(Protocol):
     """Interface for sender websocket managers"""
 
     async def sender(self) -> None:
         ...
 
 
-class Receiver(WebsocketManager):
+class Receiver(Protocol):
     """Interface for receiver websocket managers"""
 
     async def receiver(self) -> None:
@@ -53,7 +53,7 @@ class Receiver(WebsocketManager):
 
 
 @dataclass
-class BasePubSubManager(Sender, Receiver):
+class BasePubSubManager(WebsocketManager):
     """Base class for redis publish/subscribe logic."""
 
     broadcaster: Broadcast
@@ -63,7 +63,7 @@ class BasePubSubManager(Sender, Receiver):
         """Accepts given websocket connection."""
         await self.websocket.accept()
 
-    async def run_manager(self) -> None:
+    async def run(self) -> None:
         """Concurrently runs receiver and producer."""
         await asyncio.wait(
             [
@@ -90,10 +90,10 @@ class PrivateChatMessagingManager(BasePubSubManager):
         return f"private-chat:user-{user_id}"
 
     async def accept(self):
-        if await user_services.get_by_id(self.session, self.user_id) is None:
+        if await self.session.get(User, self.user_id) is None:
             raise AuthUserNotFoundWebSocketException
 
-        if await user_services.get_by_id(self.session, self.target_id) is None:
+        if await self.session.get(User, self.user_id) is None:
             raise TargetUserNotFoundWebSocketException
 
         self.chat, _ = await chat_services.get_or_create_private_chat(
@@ -112,14 +112,14 @@ class PrivateChatMessagingManager(BasePubSubManager):
                 await base_services.create(
                     self.session,
                     Message(
-                        chat_id=cast(Chat, self.chat).id,
+                        chat_id=cast(Chat, self.chat).id,  # TODO: relook
                         sender_id=self.user_id,
                         body=body["message"],
                     ),
                 )
 
                 body["from"] = UserRead.from_orm(
-                    await user_services.get_by_id(self.session, self.user_id)
+                    await self.session.get(User, self.user_id)
                 ).dict()
                 # TODO: send notification
                 await self.broadcaster.publish(
@@ -185,7 +185,7 @@ class PublicChatMessagingManager(BasePubSubManager):
             )
 
             body["from"] = UserRead.from_orm(
-                await user_services.get_by_id(self.session, self.user_id)
+                await self.session.get(User, self.user_id)
             ).dict()
             # TODO: send notifications
 
@@ -220,7 +220,7 @@ class NotificationsMessagingManager(Sender):
         return f"notifications:user-{self.user_id}"
 
     async def accept(self) -> None:
-        if await user_services.get_by_id(self.session, self.user_id) is None:
+        if await self.session.get(User, self.user_id) is None:
             raise AuthUserNotFoundWebSocketException
 
         await self.websocket.accept()
@@ -235,5 +235,5 @@ class NotificationsMessagingManager(Sender):
                 if body.get("type") == "notification":
                     await self.websocket.send_json(body)
 
-    async def run_manager(self) -> None:
+    async def run(self) -> None:
         await self.sender()

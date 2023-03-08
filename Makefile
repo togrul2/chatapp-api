@@ -50,6 +50,9 @@ type:
 test:
 	poetry run pytest
 
+test-lf:
+	poetry run pytest --lf
+
 test-cov:
 	poetry run coverage run -m pytest
 	poetry run coverage report

@@ -31,14 +31,10 @@ async def update(
     schema: Mapping[str, Any],
     *,
     commit: bool = True,
-    flush: bool = False,
 ) -> T:
     """Updates and returns updated item."""
     for key, value in schema.items():
         setattr(item, key, value)
-
-    if flush:
-        await session.flush()
 
     if commit:
         await session.commit()
