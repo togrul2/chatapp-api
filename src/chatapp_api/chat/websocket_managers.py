@@ -2,7 +2,7 @@
 import asyncio
 import json
 from dataclasses import dataclass, field
-from typing import Literal, Protocol, cast
+from typing import Literal, Protocol
 
 from broadcaster import Broadcast  # type: ignore
 from fastapi import WebSocket, WebSocketDisconnect
@@ -28,7 +28,7 @@ class MessageBody(BaseModel):
     message: str
 
 
-class WebsocketManager(Protocol):
+class AsyncWebsocketManager(Protocol):
     """Interface for websocket managers"""
 
     async def accept(self) -> None:
@@ -38,47 +38,51 @@ class WebsocketManager(Protocol):
         ...
 
 
-class Sender(Protocol):
+class AsyncSender(Protocol):
     """Interface for sender websocket managers"""
 
     async def sender(self) -> None:
         ...
 
 
-class Receiver(Protocol):
+class AsyncReceiver(Protocol):
     """Interface for receiver websocket managers"""
 
     async def receiver(self) -> None:
         ...
 
 
+# @dataclass
+# class BasePubSubManager(WebsocketManager):
+#     """Base class for redis publish/subscribe logic."""
+
+#     broadcaster: Broadcast
+#     websocket: WebSocket
+
+#     async def accept(self) -> None:
+#         """Accepts given websocket connection."""
+#         await self.websocket.accept()
+
+#     async def run(self) -> None:
+#         """Concurrently runs receiver and producer."""
+#         await asyncio.wait(
+#             [
+#                 asyncio.create_task(self.receiver()),
+#                 asyncio.create_task(self.sender()),
+#             ],
+#             return_when=asyncio.FIRST_COMPLETED,
+#         )
+
+
 @dataclass
-class BasePubSubManager(WebsocketManager):
-    """Base class for redis publish/subscribe logic."""
-
-    broadcaster: Broadcast
-    websocket: WebSocket
-
-    async def accept(self) -> None:
-        """Accepts given websocket connection."""
-        await self.websocket.accept()
-
-    async def run(self) -> None:
-        """Concurrently runs receiver and producer."""
-        await asyncio.wait(
-            [
-                asyncio.create_task(self.receiver()),
-                asyncio.create_task(self.sender()),
-            ],
-            return_when=asyncio.FIRST_COMPLETED,
-        )
-
-
-@dataclass
-class PrivateChatMessagingManager(BasePubSubManager):
+class PrivateChatMessagingManager(
+    AsyncSender, AsyncReceiver, AsyncWebsocketManager
+):
     """Private messages pub/sub manager.
     Manages messaging between two users."""
 
+    broadcaster: Broadcast
+    websocket: WebSocket
     session: AsyncSession
     user_id: int
     target_id: int
@@ -89,7 +93,7 @@ class PrivateChatMessagingManager(BasePubSubManager):
         """Returns channel name for given user id"""
         return f"private-chat:user-{user_id}"
 
-    async def accept(self):
+    async def accept(self) -> None:
         if await self.session.get(User, self.user_id) is None:
             raise AuthUserNotFoundWebSocketException
 
@@ -99,7 +103,7 @@ class PrivateChatMessagingManager(BasePubSubManager):
         self.chat, _ = await chat_services.get_or_create_private_chat(
             self.session, self.user_id, self.target_id
         )
-        await super().accept()
+        await self.websocket.accept()
 
     async def receiver(self) -> None:
         try:
@@ -109,14 +113,15 @@ class PrivateChatMessagingManager(BasePubSubManager):
                 except ValidationError:
                     return
 
-                await base_services.create(
-                    self.session,
-                    Message(
-                        chat_id=cast(Chat, self.chat).id,  # TODO: relook
-                        sender_id=self.user_id,
-                        body=body["message"],
-                    ),
-                )
+                if self.chat:
+                    await base_services.create(
+                        self.session,
+                        Message(
+                            chat_id=self.chat.id,
+                            sender_id=self.user_id,
+                            body=body["message"],
+                        ),
+                    )
 
                 body["from"] = UserRead.from_orm(
                     await self.session.get(User, self.user_id)
@@ -143,12 +148,26 @@ class PrivateChatMessagingManager(BasePubSubManager):
         except WebSocketDisconnect:
             ...
 
+    async def run(self) -> None:
+        """Concurrently runs receiver and producer."""
+
+        await asyncio.wait(
+            [
+                asyncio.create_task(self.receiver()),
+                asyncio.create_task(self.sender()),
+            ],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+
 
 @dataclass
-class PublicChatMessagingManager(BasePubSubManager):
+class PublicChatMessagingManager(
+    AsyncSender, AsyncReceiver, AsyncWebsocketManager
+):
     """Public chat messaging manager.
     Manages messaging between public chat members."""
 
+    broadcaster: Broadcast
     websocket: WebSocket
     session: AsyncSession
     user_id: int
@@ -166,7 +185,7 @@ class PublicChatMessagingManager(BasePubSubManager):
         ):
             raise WebSocketChatDoesNotExist
 
-        await super().accept()
+        await self.websocket.accept()
 
     async def receiver(self) -> None:
         async for body in self.websocket.iter_json():
@@ -206,9 +225,19 @@ class PublicChatMessagingManager(BasePubSubManager):
                         if body["from"]["id"] != self.user_id:
                             await self.websocket.send_json(body)
 
+    async def run(self) -> None:
+        """Concurrently runs receiver and producer."""
+        await asyncio.wait(
+            [
+                asyncio.create_task(self.receiver()),
+                asyncio.create_task(self.sender()),
+            ],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+
 
 @dataclass
-class NotificationsMessagingManager(Sender):
+class NotificationsMessagingManager(AsyncSender, AsyncWebsocketManager):
     """Messaging manager for obtaining notifications."""
 
     broadcaster: Broadcast

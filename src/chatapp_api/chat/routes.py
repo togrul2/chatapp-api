@@ -21,7 +21,7 @@ from src.chatapp_api.chat.schemas import (
     MembershipUpdate,
     MessageRead,
 )
-from src.chatapp_api.chat.websocket_managers import Receiver, Sender
+from src.chatapp_api.chat.websocket_managers import AsyncWebsocketManager
 from src.chatapp_api.dependencies import get_db_session, get_paginator
 from src.chatapp_api.paginator import BasePaginator
 
@@ -30,7 +30,9 @@ router = APIRouter(prefix="/api", tags=["chat"])
 
 @router.websocket("/chats/users/{target_id}", name="Private messaging")
 async def private_messaging(
-    manager: Sender | Receiver = Depends(get_private_chat_messaging_manager),
+    manager: AsyncWebsocketManager = Depends(
+        get_private_chat_messaging_manager
+    ),
 ):
     """Websocket for sending and receiving private messages."""
     await manager.accept()
@@ -61,7 +63,9 @@ async def get_private_messages_from_user(
 
 @router.websocket("/chats/{chat_id}")
 async def public_chat_messaging(
-    manager: Sender | Receiver = Depends(get_public_chat_messaging_manager),
+    manager: AsyncWebsocketManager = Depends(
+        get_public_chat_messaging_manager
+    ),
 ):
     """Websocket route for sending and receiving public chat messages."""
     await manager.accept()
@@ -322,7 +326,9 @@ async def list_user_chats(
 
 @router.websocket("/chats/notifications", name="Notifications receiver")
 async def get_notifications(
-    manager: Sender = Depends(get_notification_messaging_manager),
+    manager: AsyncWebsocketManager = Depends(
+        get_notification_messaging_manager
+    ),
 ):
     """Websocket route for getting notifications for new messages."""
     await manager.accept()
