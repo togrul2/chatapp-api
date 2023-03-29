@@ -3,19 +3,13 @@ import uuid
 from urllib import parse
 
 from fastapi import APIRouter, Depends, UploadFile, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.chatapp_api import utils
 from src.chatapp_api.auth.dependencies import get_current_user_id_from_bearer
 from src.chatapp_api.base.schemas import DetailMessage, PaginatedResponse
-from src.chatapp_api.dependencies import (
-    get_db_session,
-    get_paginator,
-    get_staticfiles_manager,
-)
-from src.chatapp_api.paginator import BasePaginator
+from src.chatapp_api.dependencies import get_staticfiles_manager
 from src.chatapp_api.staticfiles import BaseStaticFilesManager
-from src.chatapp_api.user import services as user_services
+from src.chatapp_api.user.dependencies import get_user_service
 from src.chatapp_api.user.exceptions import BadImageFileMIME
 from src.chatapp_api.user.schemas import (
     UserBase,
@@ -23,6 +17,7 @@ from src.chatapp_api.user.schemas import (
     UserPartialUpdate,
     UserRead,
 )
+from src.chatapp_api.user.service import UserService
 
 router = APIRouter(prefix="/api", tags=["user"])
 
@@ -30,7 +25,7 @@ router = APIRouter(prefix="/api", tags=["user"])
 @router.get("/users", response_model=PaginatedResponse[UserRead])
 async def list_users(
     keyword: str | None = None,
-    paginator: BasePaginator = Depends(get_paginator),
+    user_service: UserService = Depends(get_user_service),
 ):
     """
     Lists users, also can perform search with keyword
@@ -38,7 +33,7 @@ async def list_users(
     - **keyword**: keyword url parameter which will be
         used to find users with matching username or email.
     """
-    return await user_services.list_users(paginator, keyword)
+    return await user_service.list_users(keyword)
 
 
 @router.post(
@@ -53,7 +48,8 @@ async def list_users(
     },
 )
 async def create_user(
-    payload: UserCreate, session: AsyncSession = Depends(get_db_session)
+    user_create_dto: UserCreate,
+    user_service: UserService = Depends(get_user_service),
 ):
     """
     Create a user in database with given data:
@@ -63,7 +59,13 @@ async def create_user(
     - **last_name**: last name of a user
     - **password**: password
     """
-    return await user_services.create_user(session, payload)
+    return await user_service.create_user(
+        user_create_dto.username,
+        user_create_dto.email,
+        user_create_dto.first_name,
+        user_create_dto.last_name,
+        user_create_dto.password,
+    )
 
 
 @router.get(
@@ -82,11 +84,11 @@ async def create_user(
 )
 async def get_auth_user(
     user_id: int = Depends(get_current_user_id_from_bearer),
-    session: AsyncSession = Depends(get_db_session),
+    user_service: UserService = Depends(get_user_service),
 ):
     """Returns authenticated user's data.
     Returns 401 error code if unauthenticated."""
-    return await user_services.get_or_401(session, user_id)
+    return await user_service.get_or_401(user_id)
 
 
 @router.put(
@@ -108,9 +110,9 @@ async def get_auth_user(
     },
 )
 async def update_auth_user(
-    data: UserBase,
+    user_update_dto: UserBase,
     user_id: int = Depends(get_current_user_id_from_bearer),
-    session: AsyncSession = Depends(get_db_session),
+    user_service: UserService = Depends(get_user_service),
 ):
     """
     Updates authenticated user's data,
@@ -119,7 +121,13 @@ async def update_auth_user(
     - **first_name**: first name of a user, must be at least 2 characters
     - **last_name**: last name of a user, must be at least 2 characters
     """
-    return await user_services.update_user(session, user_id, data)
+    return await user_service.update_user(
+        user_id,
+        user_update_dto.username,
+        user_update_dto.email,
+        user_update_dto.first_name,
+        user_update_dto.last_name,
+    )
 
 
 @router.patch(
@@ -141,9 +149,9 @@ async def update_auth_user(
     },
 )
 async def partial_update_auth_user(
-    data: UserPartialUpdate,
+    user_partial_update_dto: UserPartialUpdate,
     user_id: int = Depends(get_current_user_id_from_bearer),
-    session: AsyncSession = Depends(get_db_session),
+    user_service: UserService = Depends(get_user_service),
 ):
     """
     Partially updates authenticated user's data,
@@ -152,7 +160,13 @@ async def partial_update_auth_user(
     - **first_name**: first name of a user, must be at least 2 characters
     - **last_name**: last name of a user, must be at least 2 characters
     """
-    return await user_services.update_user(session, user_id, data)
+    return await user_service.update_user(
+        user_id,
+        user_partial_update_dto.username,
+        user_partial_update_dto.email,
+        user_partial_update_dto.first_name,
+        user_partial_update_dto.last_name,
+    )
 
 
 @router.delete(
@@ -171,10 +185,10 @@ async def partial_update_auth_user(
 )
 async def delete_auth_user(
     user_id: int = Depends(get_current_user_id_from_bearer),
-    session: AsyncSession = Depends(get_db_session),
+    user_service: UserService = Depends(get_user_service),
 ):
     """Deletes authenticated user's data or returns 401 if unauthenticated."""
-    await user_services.delete_user(session, user_id)
+    await user_service.delete_user(user_id)
 
 
 @router.post(
@@ -198,7 +212,7 @@ async def delete_auth_user(
 async def upload_profile_picture(
     profile_picture: UploadFile,
     user_id: int = Depends(get_current_user_id_from_bearer),
-    session: AsyncSession = Depends(get_db_session),
+    user_service: UserService = Depends(get_user_service),
     staticfiles_manager: BaseStaticFilesManager = Depends(
         get_staticfiles_manager
     ),
@@ -210,7 +224,7 @@ async def upload_profile_picture(
     if profile_picture.content_type not in ("image/jpeg", "image/png"):
         raise BadImageFileMIME
 
-    path = user_services.get_profile_pictures_dir(user_id)
+    path = user_service.get_profile_pictures_dir(user_id)
 
     # Adding uuid4 to filename
     file_fullname = utils.split_path(profile_picture.filename)[-1]
@@ -224,7 +238,7 @@ async def upload_profile_picture(
         parse.urljoin(path, profile_picture.filename)
     )
 
-    return await user_services.update_profile_picture(session, user_id, url)
+    return await user_service.update_profile_picture(user_id, url)
 
 
 @router.delete(
@@ -243,10 +257,10 @@ async def upload_profile_picture(
 )
 async def remove_profile_picture(
     user_id: int = Depends(get_current_user_id_from_bearer),
-    session: AsyncSession = Depends(get_db_session),
+    user_service: UserService = Depends(get_user_service),
 ):
     """Remove profile picture for authenticated user."""
-    return await user_services.remove_profile_picture(session, user_id)
+    return await user_service.remove_profile_picture(user_id)
 
 
 @router.get(
@@ -260,14 +274,13 @@ async def remove_profile_picture(
     },
 )
 async def get_user_by_id(
-    user_id: int,
-    session: AsyncSession = Depends(get_db_session),
+    user_id: int, user_service: UserService = Depends(get_user_service)
 ):
     """
     Returns user with corresponding username or returns 404 error.
     - **user_id**: id of a user.
     """
-    return await user_services.get_or_404(session, user_id)
+    return await user_service.get_or_404(user_id)
 
 
 @router.get(
@@ -281,10 +294,10 @@ async def get_user_by_id(
     },
 )
 async def get_user_by_username(
-    username: str, session: AsyncSession = Depends(get_db_session)
+    username: str, user_service: UserService = Depends(get_user_service)
 ):
     """
     Returns user with corresponding username or returns 404 error.
     - **user_id**: id of a user.
     """
-    return await user_services.get_by_username_or_404(session, username)
+    return await user_service.get_by_username_or_404(username)

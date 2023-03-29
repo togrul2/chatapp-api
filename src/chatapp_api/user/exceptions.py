@@ -21,3 +21,9 @@ BadImageFileMIME = HTTPException(
     status_code=status.HTTP_400_BAD_REQUEST,
     detail="Wrong file type, only jpeg and png files are allowed",
 )
+
+
+InvalidOldPassword = HTTPException(
+    status_code=status.HTTP_400_BAD_REQUEST,
+    detail="Old password is incorrect.",
+)

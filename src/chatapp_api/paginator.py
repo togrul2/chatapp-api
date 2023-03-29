@@ -16,7 +16,7 @@ from sqlalchemy.sql.expression import Select
 from src.chatapp_api.base.models import CustomBase
 
 
-class PaginatedResponseDict(TypedDict):
+class Page(TypedDict):
     """Typed dict for response body of paginated GET endpoint."""
 
     results: Sequence[CustomBase] | Sequence[Row]
@@ -77,9 +77,7 @@ class BasePaginator(ABC):
             )
         ) or 0
 
-    def _response(
-        self, results: Sequence[CustomBase] | Sequence[Row]
-    ) -> PaginatedResponseDict:
+    def _response(self, results: Sequence[CustomBase] | Sequence[Row]) -> Page:
         """Returns pydantic response model for paginated queries."""
         if self.total_count is None or self.total_pages is None:
             raise ValueError(
@@ -98,8 +96,8 @@ class BasePaginator(ABC):
         }
 
     async def get_paginated_response_for_model(
-        self, paginated_query: Select | CompoundSelect
-    ) -> PaginatedResponseDict:
+        self, query: Select | CompoundSelect
+    ) -> Page:
         """
         Returns pydantic response with pagination
         applied to query of orm model. Basically
@@ -112,15 +110,15 @@ class BasePaginator(ABC):
             >>> response = self.get_paginated_response_for_model(list_query)
         """
         # Calculate total number of records
-        self.total_count = await self._calculate_total_count(paginated_query)
+        self.total_count = await self._calculate_total_count(query)
         results = (
-            await self.session.scalars(self._paginate_query(paginated_query))
+            await self.session.scalars(self._paginate_query(query))
         ).all()
         return self._response(results)
 
     async def get_paginated_response_for_rows(
         self, paginated_query: Select | CompoundSelect
-    ) -> PaginatedResponseDict:
+    ) -> Page:
         """
         Returns pydantic response with pagination applied to query of Row.
         Basically this method is for cases when scalar() is not used

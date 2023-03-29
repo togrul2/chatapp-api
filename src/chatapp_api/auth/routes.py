@@ -1,11 +1,10 @@
 from fastapi import APIRouter, Depends, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.chatapp_api.auth import services as auth_services
+from src.chatapp_api.auth.dependencies import get_auth_service
 from src.chatapp_api.auth.schemas import RefreshTokenDto, UserWithTokens
+from src.chatapp_api.auth.service import AuthService
 from src.chatapp_api.base.schemas import DetailMessage
-from src.chatapp_api.dependencies import get_db_session
 
 router = APIRouter(prefix="/api", tags=["auth"])
 
@@ -23,7 +22,7 @@ router = APIRouter(prefix="/api", tags=["auth"])
 )
 async def token(
     credentials: OAuth2PasswordRequestForm = Depends(),
-    session: AsyncSession = Depends(get_db_session),
+    auth_service: AuthService = Depends(get_auth_service),
 ):
     """
     Creates access and refresh token for user:
@@ -31,8 +30,8 @@ async def token(
     - **password**: password of a user.
 
     """
-    return await auth_services.authenticate_user(
-        session, credentials.username, credentials.password
+    return await auth_service.authenticate_user(
+        credentials.username, credentials.password
     )
 
 
@@ -48,11 +47,11 @@ async def token(
     },
 )
 async def refresh(
-    dto: RefreshTokenDto,
-    session: AsyncSession = Depends(get_db_session),
+    refresh_dto: RefreshTokenDto,
+    auth_service: AuthService = Depends(get_auth_service),
 ):
     """
     Creates access & refresh tokens based on refresh token.
     - **refresh_token**: refresh token
     """
-    return await auth_services.refresh_tokens(session, dto.refresh_token)
+    return await auth_service.refresh_tokens(refresh_dto.refresh_token)

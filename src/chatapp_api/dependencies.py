@@ -31,7 +31,7 @@ async def get_db_session() -> AsyncIterator[AsyncSession]:
 
 
 def get_staticfiles_manager() -> BaseStaticFilesManager:
-    """Dependency for staticfiles."""
+    """Dependency for staticfiles manager."""
     return LocalStaticFilesManager(STATIC_DOMAIN, STATIC_URL, STATIC_ROOT)
 
 

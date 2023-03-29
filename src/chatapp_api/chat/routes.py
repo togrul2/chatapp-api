@@ -1,11 +1,10 @@
 """Module with Chat API Routes & Websockets"""
 from fastapi import APIRouter, Depends, Form, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.chatapp_api.auth.dependencies import get_current_user_id_from_bearer
 from src.chatapp_api.base.schemas import DetailMessage, PaginatedResponse
-from src.chatapp_api.chat import services as chat_services
 from src.chatapp_api.chat.dependencies import (
+    get_chat_service,
     get_notification_messaging_manager,
     get_private_chat_messaging_manager,
     get_public_chat_messaging_manager,
@@ -21,9 +20,8 @@ from src.chatapp_api.chat.schemas import (
     MembershipUpdate,
     MessageRead,
 )
+from src.chatapp_api.chat.service import ChatService
 from src.chatapp_api.chat.websocket_managers import AsyncWebsocketManager
-from src.chatapp_api.dependencies import get_db_session, get_paginator
-from src.chatapp_api.paginator import BasePaginator
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -52,13 +50,10 @@ async def private_messaging(
 async def get_private_messages_from_user(
     target_id: int,
     user_id: int = Depends(get_current_user_id_from_bearer),
-    session: AsyncSession = Depends(get_db_session),
-    paginator: BasePaginator = Depends(get_paginator),
+    chat_service: ChatService = Depends(get_chat_service),
 ):
     """Returns messages with target user."""
-    return await chat_services.list_private_chat_messages(
-        session, user_id, target_id, paginator
-    )
+    return await chat_service.list_private_chat_messages(user_id, target_id)
 
 
 @router.websocket("/chats/{chat_id}")
@@ -75,10 +70,10 @@ async def public_chat_messaging(
 @router.get("/chats", response_model=PaginatedResponse[ChatReadWithUsersCount])
 async def list_public_chats(
     keyword: str | None = None,
-    paginator: BasePaginator = Depends(get_paginator),
+    chat_service: ChatService = Depends(get_chat_service),
 ):
     """List public chats as well as search through them."""
-    return await chat_services.list_chats(paginator, keyword)
+    return await chat_service.list_chats(keyword)
 
 
 @router.post(
@@ -99,11 +94,11 @@ async def list_public_chats(
 async def create_public_chat(
     chat: ChatCreate,
     user_id: int = Depends(get_current_user_id_from_bearer),
-    session: AsyncSession = Depends(get_db_session),
+    chat_service: ChatService = Depends(get_chat_service),
 ):
     """Create public chat. Makes creator of chat owner."""
-    return await chat_services.create_public_chat(
-        session, user_id, chat.name, chat.members
+    return await chat_service.create_public_chat(
+        user_id, chat.name, chat.members
     )
 
 
@@ -118,12 +113,13 @@ async def create_public_chat(
     },
 )
 async def get_public_chat(
-    chat_id: int, session: AsyncSession = Depends(get_db_session)
+    chat_id: int,
+    chat_service: ChatService = Depends(get_chat_service),
 ):
     """Get public chat detail with given id.
     If no public chat is found returns 404."""
-    return await chat_services.get_public_chat_with_members_count_or_404(
-        session, chat_id
+    return await chat_service.get_public_chat_with_members_count_or_404(
+        chat_id
     )
 
 
@@ -139,14 +135,12 @@ async def get_public_chat(
 )
 async def update_public_chat(
     chat_id: int,
-    data: ChatUpdate,
+    chat: ChatUpdate,
     user_id: int = Depends(get_current_user_id_from_bearer),
-    session: AsyncSession = Depends(get_db_session),
+    chat_service: ChatService = Depends(get_chat_service),
 ):
     """Update public chat info. If user is not admin, returns 403."""
-    return await chat_services.update_chat(
-        session, user_id, chat_id, data.name
-    )
+    return await chat_service.update_chat(user_id, chat_id, chat.name)
 
 
 @router.delete(
@@ -162,10 +156,10 @@ async def update_public_chat(
 async def delete_public_chat(
     chat_id: int,
     user_id: int = Depends(get_current_user_id_from_bearer),
-    session: AsyncSession = Depends(get_db_session),
+    chat_service: ChatService = Depends(get_chat_service),
 ):
     """Deletes chat with given id. If user is not owner, returns 403."""
-    await chat_services.delete_chat(session, user_id, chat_id)
+    await chat_service.delete_chat(user_id, chat_id)
 
 
 @router.post(
@@ -180,13 +174,11 @@ async def delete_public_chat(
 )
 async def get_invite_link_for_chat(
     chat_id: int,
-    session: AsyncSession = Depends(get_db_session),
     user_id: int = Depends(get_current_user_id_from_bearer),
+    chat_service: ChatService = Depends(get_chat_service),
 ):
     """Generates and returns invite link for chat with expiration link."""
-    return await chat_services.get_invite_link_for_chat(
-        session, user_id, chat_id
-    )
+    return await chat_service.get_invite_link_for_chat(user_id, chat_id)
 
 
 @router.post(
@@ -206,14 +198,12 @@ async def get_invite_link_for_chat(
 async def enroll_into_chat(
     chat_id: int,
     token: str = Form(alias="t"),
-    session: AsyncSession = Depends(get_db_session),
     user_id: int = Depends(get_current_user_id_from_bearer),
+    chat_service: ChatService = Depends(get_chat_service),
 ):
     """Enrolls user into chat.
     If token is expired or incorrect returns 400 error code."""
-    return await chat_services.enroll_user_with_token(
-        session, user_id, chat_id, token
-    )
+    return await chat_service.enroll_user_with_token(user_id, chat_id, token)
 
 
 @router.patch(
@@ -233,14 +223,14 @@ async def enroll_into_chat(
 async def update_chat_member(
     chat_id: int,
     target_id: int,
-    payload: MembershipUpdate,
-    session: AsyncSession = Depends(get_db_session),
+    membership: MembershipUpdate,
+    chat_service: ChatService = Depends(get_chat_service),
     user_id: int = Depends(get_current_user_id_from_bearer),
 ):
     """Updates user membership info in chat (is_admin).
     If non admin user, returns 403 error code."""
-    return await chat_services.update_membership(
-        session, chat_id, user_id, target_id, payload.is_admin
+    return await chat_service.update_membership(
+        chat_id, user_id, target_id, membership.is_admin
     )
 
 
@@ -258,11 +248,11 @@ async def update_chat_member(
 async def remove_chat_member(
     chat_id: int,
     target_id: int,
-    session: AsyncSession = Depends(get_db_session),
     user_id: int = Depends(get_current_user_id_from_bearer),
+    chat_service: ChatService = Depends(get_chat_service),
 ):
     """Removes user from chat. If non admin user, returns 403 error code."""
-    await chat_services.remove_member(session, chat_id, user_id, target_id)
+    await chat_service.remove_member(chat_id, user_id, target_id)
 
 
 @router.get(
@@ -277,15 +267,12 @@ async def remove_chat_member(
 )
 async def list_chat_messages(
     chat_id: int,
-    session: AsyncSession = Depends(get_db_session),
     user_id: int = Depends(get_current_user_id_from_bearer),
-    paginator: BasePaginator = Depends(get_paginator),
+    chat_service: ChatService = Depends(get_chat_service),
 ):
     """Lists chat messages. If user is not chat member,
     returns 403 http error code."""
-    return await chat_services.list_public_chat_messages(
-        session, chat_id, user_id, paginator
-    )
+    return await chat_service.list_public_chat_messages(chat_id, user_id)
 
 
 @router.get(
@@ -300,15 +287,12 @@ async def list_chat_messages(
 )
 async def list_chat_members(
     chat_id: int,
-    session: AsyncSession = Depends(get_db_session),
     user_id: int = Depends(get_current_user_id_from_bearer),
-    paginator: BasePaginator = Depends(get_paginator),
+    chat_service: ChatService = Depends(get_chat_service),
 ):
     """Lists chat members. If user is not chat member,
     returns 403 http error code."""
-    return await chat_services.list_chat_members(
-        session, chat_id, user_id, paginator
-    )
+    return await chat_service.list_chat_members(chat_id, user_id)
 
 
 @router.get(
@@ -318,10 +302,10 @@ async def list_chat_members(
 async def list_user_chats(
     keyword: str | None = None,
     user_id: int = Depends(get_current_user_id_from_bearer),
-    paginator: BasePaginator = Depends(get_paginator),
+    chat_service: ChatService = Depends(get_chat_service),
 ):
     """Returns auth user's chats sorted by the date of their last message."""
-    return await chat_services.list_user_chats(user_id, paginator, keyword)
+    return await chat_service.list_user_chats(user_id, keyword)
 
 
 @router.websocket("/chats/notifications", name="Notifications receiver")

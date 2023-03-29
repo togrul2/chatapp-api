@@ -1,16 +1,14 @@
 """Friendship related routes."""
 from fastapi import APIRouter, Depends, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.chatapp_api.auth.dependencies import get_current_user_id_from_bearer
 from src.chatapp_api.base.schemas import DetailMessage, PaginatedResponse
-from src.chatapp_api.dependencies import get_db_session, get_paginator
-from src.chatapp_api.friendship import services as friendship_services
+from src.chatapp_api.friendship.dependencies import get_friendship_service
 from src.chatapp_api.friendship.schemas import (
     FriendshipRead,
     FriendshipReadWithSender,
 )
-from src.chatapp_api.paginator import BasePaginator
+from src.chatapp_api.friendship.service import FrienshipService
 from src.chatapp_api.user.schemas import UserRead
 
 router = APIRouter(
@@ -30,13 +28,10 @@ router = APIRouter(
 )
 async def get_pending_requests(
     user_id: int = Depends(get_current_user_id_from_bearer),
-    session: AsyncSession = Depends(get_db_session),
-    paginator: BasePaginator = Depends(get_paginator),
+    friendship_service: FrienshipService = Depends(get_friendship_service),
 ):
     """Returns list of user's friendship requests pending for response."""
-    return await friendship_services.list_pending_friendships(
-        session, user_id, paginator
-    )
+    return await friendship_service.list_pending_friendships(user_id)
 
 
 @router.post(
@@ -52,14 +47,14 @@ async def get_pending_requests(
 )
 async def send_request(
     target_id: int,
-    session: AsyncSession = Depends(get_db_session),
+    friendship_service: FrienshipService = Depends(get_friendship_service),
     user_id: int = Depends(get_current_user_id_from_bearer),
 ):
     """
     Sends friendship request to the target user.
     - **target_id**: user id who receives the request.
     """
-    return await friendship_services.send_to(session, user_id, target_id)
+    return await friendship_service.send_to(user_id, target_id)
 
 
 @router.post(
@@ -74,14 +69,14 @@ async def send_request(
 )
 async def accept_request(
     target_id: int,
-    session: AsyncSession = Depends(get_db_session),
+    friendship_service: FrienshipService = Depends(get_friendship_service),
     user_id: int = Depends(get_current_user_id_from_bearer),
 ):
     """
     Accepts friendship request from target.
     Returns 404 if there is no request from target user.
     """
-    return await friendship_services.approve(session, user_id, target_id)
+    return await friendship_service.approve(user_id, target_id)
 
 
 @router.post(
@@ -96,20 +91,20 @@ async def accept_request(
 )
 async def delete_friendship(
     target_id: int,
-    session: AsyncSession = Depends(get_db_session),
+    friendship_service: FrienshipService = Depends(get_friendship_service),
     user_id: int = Depends(get_current_user_id_from_bearer),
 ):
     """Deletes friendship with given user if it exists."""
-    await friendship_services.decline(session, user_id, target_id)
+    await friendship_service.decline(user_id, target_id)
 
 
 @router.get("/friends", response_model=PaginatedResponse[UserRead])
 async def list_friends(
     user_id: int = Depends(get_current_user_id_from_bearer),
-    paginator: BasePaginator = Depends(get_paginator),
+    friendship_service: FrienshipService = Depends(get_friendship_service),
 ):
     """Returns list of friends."""
-    return await friendship_services.list_friends(user_id, paginator)
+    return await friendship_service.list_friends(user_id)
 
 
 @router.get(
@@ -124,10 +119,10 @@ async def list_friends(
 )
 async def get_frienship(
     target_id: int,
-    session: AsyncSession = Depends(get_db_session),
+    friendship_service: FrienshipService = Depends(get_friendship_service),
     user_id: int = Depends(get_current_user_id_from_bearer),
 ):
     """Returns friendship with given user."""
-    return await friendship_services.get_friendship_with_user_or_404(
-        session, user_id, target_id
+    return await friendship_service.get_friendship_with_user_or_404(
+        user_id, target_id
     )
