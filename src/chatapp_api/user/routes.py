@@ -1,17 +1,17 @@
 """User related routes."""
-import uuid
-from urllib import parse
-
 from fastapi import APIRouter, Depends, UploadFile, status
 
-from src.chatapp_api import utils
 from src.chatapp_api.auth.dependencies import get_current_user_id_from_bearer
+from src.chatapp_api.base.routes import (
+    BadCredentialsResponse,
+    BadDataResponse,
+    NotFoundResponse,
+    RouteResponse,
+)
 from src.chatapp_api.base.schemas import DetailMessage, PaginatedResponse
-from src.chatapp_api.dependencies import get_staticfiles_manager
-from src.chatapp_api.staticfiles import BaseStaticFilesManager
 from src.chatapp_api.user.dependencies import get_user_service
-from src.chatapp_api.user.exceptions import BadImageFileMIME
 from src.chatapp_api.user.schemas import (
+    UpdatePassword,
     UserBase,
     UserCreate,
     UserPartialUpdate,
@@ -20,6 +20,13 @@ from src.chatapp_api.user.schemas import (
 from src.chatapp_api.user.service import UserService
 
 router = APIRouter(prefix="/api", tags=["user"])
+
+DataConflictResponse: RouteResponse = {
+    status.HTTP_409_CONFLICT: {
+        "model": DetailMessage,
+        "description": "Username or email is already taken",
+    }
+}
 
 
 @router.get("/users", response_model=PaginatedResponse[UserRead])
@@ -40,12 +47,7 @@ async def list_users(
     "/users",
     status_code=status.HTTP_201_CREATED,
     response_model=UserRead,
-    responses={
-        status.HTTP_400_BAD_REQUEST: {
-            "model": DetailMessage,
-            "description": "Taken or invalid properties.",
-        }
-    },
+    responses=BadDataResponse,
 )
 async def create_user(
     user_create_dto: UserCreate,
@@ -71,16 +73,7 @@ async def create_user(
 @router.get(
     "/users/me",
     response_model=UserRead,
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {
-            "model": DetailMessage,
-            "description": "Bad access token.",
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "model": DetailMessage,
-            "description": "Can't find authenticated user.",
-        },
-    },
+    responses=BadCredentialsResponse,
 )
 async def get_auth_user(
     user_id: int = Depends(get_current_user_id_from_bearer),
@@ -94,20 +87,7 @@ async def get_auth_user(
 @router.put(
     "/users/me",
     response_model=UserRead,
-    responses={
-        status.HTTP_400_BAD_REQUEST: {
-            "model": DetailMessage,
-            "description": "Taken or invalid properties",
-        },
-        status.HTTP_401_UNAUTHORIZED: {
-            "model": DetailMessage,
-            "description": "Bad access token.",
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "model": DetailMessage,
-            "description": "Can't find authenticated user.",
-        },
-    },
+    responses=DataConflictResponse | BadDataResponse | BadCredentialsResponse,
 )
 async def update_auth_user(
     user_update_dto: UserBase,
@@ -133,20 +113,7 @@ async def update_auth_user(
 @router.patch(
     "/users/me",
     response_model=UserRead,
-    responses={
-        status.HTTP_400_BAD_REQUEST: {
-            "model": DetailMessage,
-            "description": "Taken or invalid properties",
-        },
-        status.HTTP_401_UNAUTHORIZED: {
-            "model": DetailMessage,
-            "description": "Bad access token.",
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "model": DetailMessage,
-            "description": "Can't find authenticated user.",
-        },
-    },
+    responses=DataConflictResponse | BadDataResponse | BadCredentialsResponse,
 )
 async def partial_update_auth_user(
     user_partial_update_dto: UserPartialUpdate,
@@ -172,16 +139,7 @@ async def partial_update_auth_user(
 @router.delete(
     "/users/me",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {
-            "model": DetailMessage,
-            "description": "Bad access token.",
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "model": DetailMessage,
-            "description": "Can't find authenticated user.",
-        },
-    },
+    responses=BadCredentialsResponse,
 )
 async def delete_auth_user(
     user_id: int = Depends(get_current_user_id_from_bearer),
@@ -199,61 +157,25 @@ async def delete_auth_user(
             "model": DetailMessage,
             "description": "wrong file type (MIME different than jpeg or png)",
         },
-        status.HTTP_401_UNAUTHORIZED: {
-            "model": DetailMessage,
-            "description": "Bad access token.",
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "model": DetailMessage,
-            "description": "Can't find authenticated user.",
-        },
+        **BadCredentialsResponse,
     },
 )
 async def upload_profile_picture(
     profile_picture: UploadFile,
     user_id: int = Depends(get_current_user_id_from_bearer),
     user_service: UserService = Depends(get_user_service),
-    staticfiles_manager: BaseStaticFilesManager = Depends(
-        get_staticfiles_manager
-    ),
 ):
     """
     Upload image for authenticated user.
     - **image**: image file.
     """
-    if profile_picture.content_type not in ("image/jpeg", "image/png"):
-        raise BadImageFileMIME
-
-    path = user_service.get_profile_pictures_dir(user_id)
-
-    # Adding uuid4 to filename
-    file_fullname = utils.split_path(profile_picture.filename)[-1]
-    filename, ext = file_fullname.rsplit(".", 1)
-    filename = f"{filename}_{uuid.uuid4()}"
-    profile_picture.filename = ".".join([filename, ext])
-
-    # loading file into storage and generating web link
-    staticfiles_manager.load(path, profile_picture)
-    url = staticfiles_manager.get_url(
-        parse.urljoin(path, profile_picture.filename)
-    )
-
-    return await user_service.update_profile_picture(user_id, url)
+    return await user_service.update_profile_picture(user_id, profile_picture)
 
 
 @router.delete(
     "/users/me/image",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses={
-        status.HTTP_401_UNAUTHORIZED: {
-            "model": DetailMessage,
-            "description": "Bad access token.",
-        },
-        status.HTTP_404_NOT_FOUND: {
-            "model": DetailMessage,
-            "description": "Can't find authenticated user.",
-        },
-    },
+    responses=BadCredentialsResponse,
 )
 async def remove_profile_picture(
     user_id: int = Depends(get_current_user_id_from_bearer),
@@ -263,15 +185,31 @@ async def remove_profile_picture(
     return await user_service.remove_profile_picture(user_id)
 
 
+@router.post(
+    "/users/me/change-password",
+    response_model=UserRead,
+    responses={
+        status.HTTP_400_BAD_REQUEST: {
+            "model": DetailMessage,
+            "description": "Old password is incorrect",
+        },
+        **BadCredentialsResponse,
+    },
+)
+async def change_password(
+    passwords: UpdatePassword,
+    user_id: int = Depends(get_current_user_id_from_bearer),
+    user_service: UserService = Depends(get_user_service),
+):
+    return await user_service.update_user_password(
+        user_id, passwords.old_password, passwords.new_password
+    )
+
+
 @router.get(
     "/users/{user_id:int}",
     response_model=UserRead,
-    responses={
-        status.HTTP_404_NOT_FOUND: {
-            "model": DetailMessage,
-            "description": "User with given id is not found.",
-        }
-    },
+    responses=NotFoundResponse,
 )
 async def get_user_by_id(
     user_id: int, user_service: UserService = Depends(get_user_service)
@@ -286,12 +224,7 @@ async def get_user_by_id(
 @router.get(
     "/users/{username:str}",
     response_model=UserRead,
-    responses={
-        status.HTTP_404_NOT_FOUND: {
-            "model": DetailMessage,
-            "description": "User with given username is not found.",
-        }
-    },
+    responses=NotFoundResponse,
 )
 async def get_user_by_username(
     username: str, user_service: UserService = Depends(get_user_service)

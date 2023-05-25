@@ -1,7 +1,7 @@
 """Module with friendship repository"""
 from dataclasses import dataclass
 
-from sqlalchemy import and_, exists, or_, select
+from sqlalchemy import Row, and_, exists, or_, select
 from sqlalchemy.orm import defer, joinedload
 
 from src.chatapp_api.base.repository import BaseRepository
@@ -16,9 +16,11 @@ class FriendshipRepository(BaseRepository[Friendship]):
 
     paginator: BasePaginator
 
-    async def find_pending_requests_for_user(self, user_id: int) -> Page:
+    async def find_pending_requests_for_user(
+        self, user_id: int
+    ) -> Page[Friendship]:
         """Returns pending requests for given user"""
-        return await self.paginator.get_paginated_response_for_model(
+        return await self.paginator.get_page_for_model(
             select(Friendship)
             .options(
                 joinedload(Friendship.sender), defer(Friendship.sender_id)
@@ -31,7 +33,7 @@ class FriendshipRepository(BaseRepository[Friendship]):
             )
         )
 
-    async def find_friends_for_user(self, user_id: int) -> Page:
+    async def find_friends_for_user(self, user_id: int) -> Page[Row]:
         """Returns list of friends for user."""
         sent_query = (
             select(User)
@@ -55,7 +57,7 @@ class FriendshipRepository(BaseRepository[Friendship]):
             )
         )
 
-        return await self.paginator.get_paginated_response_for_rows(
+        return await self.paginator.get_page_for_rows(
             sent_query.union(received_query)
         )
 

@@ -64,15 +64,16 @@ class Chat(CreateTimestampMixin, CustomBase):
         .scalar_subquery(),
         deferred=True,
     )
-    _latest_message_date_query = (
-        select(func.max(Message.created_at))
-        .where(Message.chat_id == id)
-        .correlate_except(Message)
-        .scalar_subquery()
-    )
+
     last_message_id: Mapped[int] = column_property(
         select(Message.id)
-        .where(Message.created_at == _latest_message_date_query)
+        .where(
+            Message.created_at
+            == select(func.max(Message.created_at))
+            .where(Message.chat_id == id)
+            .correlate_except(Message)
+            .scalar_subquery()
+        )
         .correlate_except(Message)
         .scalar_subquery(),
         deferred=True,

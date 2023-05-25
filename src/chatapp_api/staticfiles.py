@@ -22,6 +22,10 @@ class BaseStaticFilesManager(ABC):
         return parse.urljoin(self.static_url, path)
 
     @abstractmethod
+    def get(self, path: str) -> str:
+        ...
+
+    @abstractmethod
     def load(self, path: str, file: UploadFile) -> None:
         """Load file to the target path"""
 
@@ -34,8 +38,10 @@ class LocalStaticFilesManager(BaseStaticFilesManager):
     static_url: str
     static_root: Path
 
-    def load(self, path: str, file: UploadFile):
-        """Uploads file to given path"""
+    def get(self, path: str) -> str:
+        return f"{self.static_url}/{path}"
+
+    def load(self, path: str, file: UploadFile) -> None:
         full_path = self.static_root / path
         full_path.mkdir(exist_ok=True, parents=True)
         file_path = full_path / file.filename

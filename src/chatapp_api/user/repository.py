@@ -14,7 +14,7 @@ class UserRepository(BaseRepository[User]):
 
     paginator: BasePaginator
 
-    async def exists_user_with_username(self, username: str) -> bool:
+    async def is_username_taken(self, username: str) -> bool:
         """Returns whether there is a user with given username"""
         return (
             await self.session.scalar(
@@ -22,9 +22,7 @@ class UserRepository(BaseRepository[User]):
             )
         ) or False
 
-    async def exists_user_with_username_and_id_not(
-        self, username: str, id: int
-    ) -> bool:
+    async def is_username_taken_not_by(self, username: str, id: int) -> bool:
         """Returns whether there is a user with given username.
         Excludes given user id from search."""
         return (
@@ -35,7 +33,7 @@ class UserRepository(BaseRepository[User]):
             )
         ) or False
 
-    async def exists_user_with_email(self, email: str) -> bool:
+    async def is_email_taken(self, email: str) -> bool:
         """Returns whether there is a user with given email."""
         return (
             await self.session.scalar(
@@ -43,9 +41,7 @@ class UserRepository(BaseRepository[User]):
             )
         ) or False
 
-    async def exists_user_with_email_and_id_not(
-        self, email: str, id: int
-    ) -> bool:
+    async def is_email_taken_not_by(self, email: str, id: int) -> bool:
         """Returns whether there is a user with given email.
         Excludes given user id from search."""
         return (
@@ -66,15 +62,13 @@ class UserRepository(BaseRepository[User]):
             select(User).where(User.username == username)
         )
 
-    async def find_users(self) -> Page:
+    async def find_users(self) -> Page[User]:
         """Returns all users for given page"""
-        return await self.paginator.get_paginated_response_for_model(
-            select(User)
-        )
+        return await self.paginator.get_page_for_model(select(User))
 
-    async def find_users_matching_keyword(self, keyword: str) -> Page:
+    async def find_users_matching_keyword(self, keyword: str) -> Page[User]:
         """Returns all users for given page which match given keyword."""
-        return await self.paginator.get_paginated_response_for_model(
+        return await self.paginator.get_page_for_model(
             select(User).where(
                 or_(
                     func.upper(User.username).like(f"%{keyword}%"),

@@ -3,7 +3,7 @@ import math
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import TypedDict
+from typing import Generic, TypeVar
 from urllib import parse
 
 from fastapi import Request
@@ -15,11 +15,14 @@ from sqlalchemy.sql.expression import Select
 
 from src.chatapp_api.base.models import CustomBase
 
+T = TypeVar("T", bound=CustomBase | Row)
 
-class Page(TypedDict):
+
+@dataclass
+class Page(Generic[T]):
     """Typed dict for response body of paginated GET endpoint."""
 
-    results: Sequence[CustomBase] | Sequence[Row]
+    results: Sequence[T]
     total_pages: int
     total_records: int
     current_page: int
@@ -43,8 +46,8 @@ class BasePaginator(ABC):
 
     @abstractmethod
     def _paginate_query(
-        self, query: Select | CompoundSelect
-    ) -> Select | CompoundSelect:
+        self, query: Select[tuple[T]] | CompoundSelect
+    ) -> Select[tuple[T]] | CompoundSelect:
         """Method where pagination takes place."""
 
     def _get_url_for_page(self, page: int) -> str | None:
@@ -68,7 +71,7 @@ class BasePaginator(ABC):
         return f"{base_url}?{query_params_string}"
 
     async def _calculate_total_count(
-        self, query: Select | CompoundSelect
+        self, query: Select[tuple[T]] | CompoundSelect
     ) -> int:
         """Calculates total number of records in table."""
         return (
@@ -77,7 +80,7 @@ class BasePaginator(ABC):
             )
         ) or 0
 
-    def _response(self, results: Sequence[CustomBase] | Sequence[Row]) -> Page:
+    def _response(self, results: Sequence[T]) -> Page[T]:
         """Returns pydantic response model for paginated queries."""
         if self.total_count is None or self.total_pages is None:
             raise ValueError(
@@ -85,19 +88,19 @@ class BasePaginator(ABC):
                 " _calculate_total_count(). Make sure you call them first."
             )
 
-        return {
-            "results": results,
-            "total_pages": self.total_pages,
-            "total_records": self.total_count,
-            "current_page": self.page,
-            "items_per_page": self.page_size,
-            "prev_page": self._get_url_for_page(self.page - 1),
-            "next_page": self._get_url_for_page(self.page + 1),
-        }
+        return Page(
+            results=results,
+            total_pages=self.total_pages,
+            total_records=self.total_count,
+            current_page=self.page,
+            items_per_page=self.page_size,
+            prev_page=self._get_url_for_page(self.page - 1),
+            next_page=self._get_url_for_page(self.page + 1),
+        )
 
-    async def get_paginated_response_for_model(
-        self, query: Select | CompoundSelect
-    ) -> Page:
+    async def get_page_for_model(
+        self, query: Select[tuple[T]] | CompoundSelect
+    ) -> Page[T]:
         """
         Returns pydantic response with pagination
         applied to query of orm model. Basically
@@ -116,9 +119,9 @@ class BasePaginator(ABC):
         ).all()
         return self._response(results)
 
-    async def get_paginated_response_for_rows(
-        self, paginated_query: Select | CompoundSelect
-    ) -> Page:
+    async def get_page_for_rows(
+        self, query: Select[tuple[Row]] | CompoundSelect
+    ) -> Page[Row]:
         """
         Returns pydantic response with pagination applied to query of Row.
         Basically this method is for cases when scalar() is not used
@@ -131,9 +134,9 @@ class BasePaginator(ABC):
             >>>     .join(Membership).group_by(Chat.id))
             >>> response = self.get_paginated_response_for_rows(list_query)
         """
-        self.total_count = await self._calculate_total_count(paginated_query)
+        self.total_count = await self._calculate_total_count(query)
         results = (
-            await self.session.execute(self._paginate_query(paginated_query))
+            await self.session.execute(self._paginate_query(query))
         ).all()
         return self._response(results)
 
@@ -144,8 +147,8 @@ class LimitOffsetPaginator(BasePaginator):
     Uses database limit & offset query parameters for paginating results."""
 
     def _paginate_query(
-        self, query: Select | CompoundSelect
-    ) -> Select | CompoundSelect:
+        self, query: Select[tuple[T]] | CompoundSelect
+    ) -> Select[tuple[T]] | CompoundSelect:
         """Returns paginated query with limit/offset and
         sets total_pages attribute. If total_count attribute is None,
         raises ValueError, so it must be calculated and

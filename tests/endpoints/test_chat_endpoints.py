@@ -173,9 +173,11 @@ class TestPublicChatApi:
             response.status_code == status.HTTP_201_CREATED
         ), AssertionErrors.HTTP_NOT_200_OK
 
-        chat = await session.scalar(
-            select(Chat).where(Chat.name == payload["name"])
-        )
+        chat = (
+            await session.scalars(
+                select(Chat).where(Chat.name == payload["name"])
+            )
+        ).one_or_none()
         assert chat is not None, "Chat is not created"
         assert (
             await session.scalar(

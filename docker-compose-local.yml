@@ -8,6 +8,10 @@ services:
     command: /start
     volumes:
       - .:/app
+    networks:
+      - fastapi
+      - postgres
+      - redis
     ports:
       - "8000:8000"
     env_file:
@@ -22,6 +26,8 @@ services:
     container_name: chatapp_postgres_db
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    networks:
+      - postgres
     env_file:
       - ./docker/local/postgres/.env
 
@@ -29,7 +35,14 @@ services:
     image: redis:6.0.16
     volumes:
       - redis-data:/data
+    networks:
+      - redis
 
 volumes:
   postgres-data:
   redis-data:
+
+networks:
+  fastapi:
+  postgres:
+  redis:

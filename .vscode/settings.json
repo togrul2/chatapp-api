@@ -6,7 +6,8 @@
         "editor.formatOnSave": true
     },
     "python.poetryPath": "C:/Users/user/AppData/Roaming/pypoetry/venv/Scripts/poetry.exe",
-    "python.linting.pylintPath": ".venv/Scripts/flake8",
+    "python.linting.flake8Enabled": true,
+    "python.linting.flake8Path": ".venv/bin/flake8",
     "python.linting.flake8Args": [
         "--ignore=S101"
     ],

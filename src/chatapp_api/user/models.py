@@ -1,7 +1,7 @@
 """Module with user related models."""
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from sqlalchemy import ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -21,6 +21,10 @@ class User(CustomBase):
     __tablename__ = "user"
     __repr_fields__ = ("id", "username")
 
+    def __init__(self, *args, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self._full_profile_picture_url = None
+
     id: Mapped[int] = mapped_column(primary_key=True)
     first_name: Mapped[str50 | None]
     last_name: Mapped[str50 | None]
@@ -28,6 +32,14 @@ class User(CustomBase):
     email: Mapped[str50] = mapped_column(unique=True, nullable=False)
     password: Mapped[str255]
     profile_picture: Mapped[str255 | None]
+
+    @property
+    def full_profile_picture(self):
+        return self._full_profile_picture_url
+
+    @full_profile_picture.setter
+    def full_profile_picture(self, value: str):
+        self._full_profile_picture_url = value
 
 
 class Block(CustomBase):

@@ -1,6 +1,8 @@
 """Friendship services module."""
 from dataclasses import dataclass
 
+from sqlalchemy import Row
+
 from src.chatapp_api.base.exceptions import NotFoundException
 from src.chatapp_api.friendship.exceptions import (
     RequestAlreadySent,
@@ -19,14 +21,14 @@ class FrienshipService:
     user_service: UserService
     friendship_repository: FriendshipRepository
 
-    async def list_pending_friendships(self, user_id: int) -> Page:
+    async def list_pending_friendships(self, user_id: int) -> Page[Friendship]:
         """List of users pending requests."""
         user = await self.user_service.get_or_404(user_id)
         return await self.friendship_repository.find_pending_requests_for_user(
             user.id
         )
 
-    async def list_friends(self, user_id: int) -> Page:
+    async def list_friends(self, user_id: int) -> Page[Row]:
         """List of all friends user has."""
         return await self.friendship_repository.find_friends_for_user(user_id)
 

@@ -60,17 +60,19 @@ class ChatRepository(BaseRepository[Chat]):
             )
         ) or False
 
-    async def find_all_chats(self) -> Page:
+    async def find_all_chats(self) -> Page[Chat]:
         """Returns all chats from given page."""
-        return await self.paginator.get_paginated_response_for_model(
+        return await self.paginator.get_page_for_model(
             select(Chat)
             .options(undefer(Chat.users_count))
             .where(Chat.private == False)  # noqa: E712
         )
 
-    async def find_all_chats_matching_keyword(self, keyword: str) -> Page:
+    async def find_all_chats_matching_keyword(
+        self, keyword: str
+    ) -> Page[Chat]:
         """Returns chats that match keyword."""
-        return await self.paginator.get_paginated_response_for_model(
+        return await self.paginator.get_page_for_model(
             select(Chat)
             .options(undefer(Chat.users_count))
             .where(
@@ -95,10 +97,10 @@ class ChatRepository(BaseRepository[Chat]):
             .where(Chat.id == id)
         )
 
-    async def find_chats_by_user(self, user_id: int) -> Page:
+    async def find_chats_by_user(self, user_id: int) -> Page[Chat]:
         """Finds chats that given user is enrolled into.
         Orders messages by the date of the last message."""
-        return await self.paginator.get_paginated_response_for_model(
+        return await self.paginator.get_page_for_model(
             select(Chat)
             .distinct()
             .join(Membership, Membership.chat_id == Chat.id)
@@ -116,11 +118,11 @@ class ChatRepository(BaseRepository[Chat]):
 
     async def find_chats_by_user_and_keyword(
         self, user_id: int, keyword: str
-    ) -> Page:
+    ) -> Page[Chat]:
         """Finds chats that given user is enrolled into
         and match the given keyword. Orders messages by the
         date of the last message."""
-        return await self.paginator.get_paginated_response_for_model(
+        return await self.paginator.get_page_for_model(
             select(Chat)
             .distinct()
             .join(Membership, Membership.chat_id == Chat.id)
@@ -161,10 +163,10 @@ class MembershipRepository(BaseRepository[Membership]):
             )
         )
 
-    async def find_members_by_chat_id(self, id: int) -> Page:
+    async def find_members_by_chat_id(self, id: int) -> Page[Membership]:
         """Finds memberships from given chat.
         Joins membership with user entity."""
-        return await self.paginator.get_paginated_response_for_model(
+        return await self.paginator.get_page_for_model(
             select(Membership)
             .distinct()
             .options(joinedload(Membership.user))
@@ -178,10 +180,12 @@ class MessageRepository(BaseRepository[Message]):
 
     paginator: BasePaginator
 
-    async def find_messages_by_private_chat_id(self, chat_id: int) -> Page:
+    async def find_messages_by_private_chat_id(
+        self, chat_id: int
+    ) -> Page[Message]:
         """Returns messages from private chat.
         Orders by the descending message creation dates."""
-        return await self.paginator.get_paginated_response_for_model(
+        return await self.paginator.get_page_for_model(
             select(Message)
             .distinct()
             .options(joinedload(Message.sender), defer(Message.sender_id))
@@ -189,13 +193,15 @@ class MessageRepository(BaseRepository[Message]):
             .order_by(Message.created_at.desc())
         )
 
-    async def find_messages_by_public_chat_id(self, chat_id: int) -> Page:
+    async def find_messages_by_public_chat_id(
+        self, chat_id: int
+    ) -> Page[Message]:
         """Returns messages from public chat.
         Orders by the descending message creation dates."""
-        return await self.paginator.get_paginated_response_for_model(
+        return await self.paginator.get_page_for_model(
             select(Message)
-            .distinct()
             .options(joinedload(Message.sender), defer(Message.sender_id))
             .where(Message.chat_id == chat_id)
             .order_by(Message.created_at.desc())
+            .distinct()
         )

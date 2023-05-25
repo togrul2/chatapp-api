@@ -55,14 +55,16 @@ class TestFriendshipRequestDetail:
         )
         body = response.json()
 
-        created_friendship = await session.scalar(
-            select(Friendship).where(
-                and_(
-                    Friendship.sender_id == user.id,
-                    Friendship.receiver_id == sender_user.id,
+        created_friendship = (
+            await session.scalars(
+                select(Friendship).where(
+                    and_(
+                        Friendship.sender_id == user.id,
+                        Friendship.receiver_id == sender_user.id,
+                    )
                 )
             )
-        )
+        ).one_or_none()
 
         assert (
             response.status_code == status.HTTP_201_CREATED
@@ -101,11 +103,10 @@ class TestFriendshipRequestDetail:
 
         assert response.status_code == status.HTTP_204_NO_CONTENT
         assert (
-            await session.scalar(
+            await session.scalars(
                 select(Friendship).where(Friendship.id == friendship.id)
             )
-            is None
-        ), "Friendship is not deleted after rejection"
+        ).one_or_none() is None, "Friendship is not deleted after rejection"
 
     async def test_accept_friendship_request(
         self,
@@ -117,14 +118,16 @@ class TestFriendshipRequestDetail:
         """Test accepting friendship request from a target user."""
         accept_url = self.url.format(target_id=sender_user.id) + "/accept"
         response = await auth_client.post(accept_url)
-        friendship = await session.scalar(
-            select(Friendship).where(
-                and_(
-                    Friendship.id == friendship_request.id,
-                    Friendship.accepted == True,  # noqa: E712
+        friendship = (
+            await session.scalars(
+                select(Friendship).where(
+                    and_(
+                        Friendship.id == friendship_request.id,
+                        Friendship.accepted == True,  # noqa: E712
+                    )
                 )
             )
-        )
+        ).one_or_none()
 
         assert (
             response.status_code == status.HTTP_200_OK

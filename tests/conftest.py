@@ -4,14 +4,12 @@ Config and fixtures for tests.
 import asyncio
 import os
 import shutil
-from typing import cast
 
 import pytest
 from fastapi import FastAPI
 from httpx import AsyncClient, Headers
-from sqlalchemy import Engine
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import sessionmaker
 
 from src.chatapp_api.auth.jwt import create_access_token, password_context
 from src.chatapp_api.chat.models import Chat
@@ -51,14 +49,11 @@ dbms_session: DBSQLAsyncManager = PostgreSQLAsyncManager(
 
 
 test_engine = create_async_engine(url=test_db_url)
-async_session = cast(
-    AsyncSession,
-    sessionmaker(
-        cast(Engine, test_engine),
-        class_=cast(Session, AsyncSession),
-        autoflush=False,
-        expire_on_commit=False,
-    ),
+async_session = sessionmaker(
+    bind=test_engine,
+    class_=AsyncSession,
+    autoflush=False,
+    expire_on_commit=False,
 )
 
 

@@ -92,7 +92,7 @@ class ChatService:
 
     async def list_private_chat_messages(
         self, user_id: int, target_id: int
-    ) -> Page:
+    ) -> Page[Message]:
         """Returns messages from a private chat with a given id."""
         if (
             chat := await self.chat_repository.find_private_chat(
@@ -133,7 +133,7 @@ class ChatService:
         )
         return membership is not None and membership.is_owner is True
 
-    async def list_chats(self, keyword: str | None = None) -> Page:
+    async def list_chats(self, keyword: str | None = None) -> Page[Chat]:
         """Returns list of all records.
         If keyword passed returns matching chats only."""
         if keyword:
@@ -291,7 +291,7 @@ class ChatService:
         user_id: int,
         target_id: int,
         is_admin: bool | None = None,
-    ):
+    ) -> Membership:
         """Updates chat member's information, his admin, owner status.
         If User is not chat admin raises 403.
         If non owner tries to make someone owner raises 403."""
@@ -343,7 +343,7 @@ class ChatService:
 
     async def list_public_chat_messages(
         self, chat_id: int, user_id: int
-    ) -> Page:
+    ) -> Page[Message]:
         """Lists messages from public chat,
         if user is not chat member, raises 403."""
         if not await self.is_chat_member(user_id, chat_id):
@@ -353,7 +353,9 @@ class ChatService:
             chat_id
         )
 
-    async def list_chat_members(self, chat_id: int, user_id: int) -> Page:
+    async def list_chat_members(
+        self, chat_id: int, user_id: int
+    ) -> Page[Membership]:
         """Lists chat members. If given user is not chat member, raises 403."""
         if not await self.is_chat_member(user_id, chat_id):
             raise UserNotMemberException
@@ -366,7 +368,7 @@ class ChatService:
         self,
         user_id: int,
         keyword: str | None,
-    ) -> Page:
+    ) -> Page[Chat]:
         """Returns target user's chats.
         Sorts them by the date of last message."""
         if keyword:
