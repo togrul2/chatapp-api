@@ -1,9 +1,10 @@
 """Module with custom paginator classes."""
+
 import math
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 from urllib import parse
 
 from fastapi import Request
@@ -108,9 +109,9 @@ class BasePaginator(ABC):
         can be used where select() only takes model instance.
 
         Example:
-            >>> from src.user.models import User
+            >>> from src.chatapp_api.user.models import User
             >>> list_query = select(User)
-            >>> response = self.get_paginated_response_for_model(list_query)
+            >>> response = self.get_page_for_model(list_query)
         """
         # Calculate total number of records
         self.total_count = await self._calculate_total_count(query)
@@ -120,7 +121,7 @@ class BasePaginator(ABC):
         return self._response(results)
 
     async def get_page_for_rows(
-        self, query: Select[tuple[Row]] | CompoundSelect
+        self, query: Select[tuple[Any, ...]] | CompoundSelect
     ) -> Page[Row]:
         """
         Returns pydantic response with pagination applied to query of Row.
@@ -128,11 +129,12 @@ class BasePaginator(ABC):
         and select() takes different fields.
 
         Example:
-            >>> from src.chat.models import Chat, Membership
+            >>> from src.chatapp_api.chat.models import Chat, Membership
             >>> list_query = (
             >>>     select(Chat, func.count(Membership.id))
-            >>>     .join(Membership).group_by(Chat.id))
-            >>> response = self.get_paginated_response_for_rows(list_query)
+            >>>     .join(Membership).group_by(Chat.id)
+            >>> )
+            >>> response = self.get_page_for_rows(list_query)
         """
         self.total_count = await self._calculate_total_count(query)
         results = (
