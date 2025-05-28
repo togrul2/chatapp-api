@@ -1,6 +1,4 @@
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Optional
 
 from chatapp_api_hex.domain.entities.base import Entity
 from chatapp_api_hex.domain.value_objects.email import Email
@@ -12,10 +10,10 @@ class User(Entity):
 
     username: str
     email: Email
-    password: str  # Note: This should be hashed before storage
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    profile_picture: Optional[str] = None
+    password: str
+    first_name: str | None = None
+    last_name: str | None = None
+    profile_picture: str | None = None
 
     @property
     def full_name(self) -> str:
@@ -24,17 +22,7 @@ class User(Entity):
             return f"{self.first_name} {self.last_name}"
         return self.first_name or self.last_name or self.username
 
-    def update_profile(
-        self,
-        first_name: Optional[str] = None,
-        last_name: Optional[str] = None,
-        profile_picture: Optional[str] = None,
-    ) -> None:
-        """Update user profile information."""
-        if first_name is not None:
-            self.first_name = first_name
-        if last_name is not None:
-            self.last_name = last_name
-        if profile_picture is not None:
-            self.profile_picture = profile_picture
-        self.updated_at = datetime.now(timezone.utc)
+    def __repr__(self) -> str:
+        return (
+            f"User(id={self.id}, username={self.username}, email={self.email})"
+        )

@@ -18,3 +18,9 @@ class Entity:
             self.created_at = now
         if not self.updated_at:
             self.updated_at = now
+
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(id={self.id})"
+
+    def __str__(self) -> str:
+        return f"{self.__class__.__name__}(id={self.id})"

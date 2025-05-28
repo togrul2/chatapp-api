@@ -9,7 +9,7 @@ class DomainEvent:
     """Base class for all domain events."""
 
     event_data: dict[str, Any]
-    event_id: str
+    event_id: str | None = None
     occurred_on: datetime | None = None
     event_type: str | None = None
 

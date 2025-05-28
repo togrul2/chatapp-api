@@ -10,7 +10,7 @@ class Email(ValueObject):
 
     value: str
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         """Validate email format."""
         if not self._is_valid_email(self.value):
             raise ValueError("Invalid email format")
